@@ -1,7 +1,7 @@
 .PHONY: dev build test clean
 
-dev:
-	go run .
+dev: build
+	./bin/sdcard-dump
 
 build:
 	@mkdir -p bin
