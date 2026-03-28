@@ -4,10 +4,11 @@ dev:
 	go run .
 
 build:
-	go build -o sdcard-dump .
+	@mkdir -p bin
+	go build -o bin/sdcard-dump .
 
 test:
 	go test ./...
 
 clean:
-	rm -f sdcard-dump
+	rm -rf bin
