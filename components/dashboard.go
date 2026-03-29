@@ -58,6 +58,12 @@ func NewDashboard(cards []CardProgress) DashboardModel {
 	}
 }
 
+// SetSize updates the terminal dimensions for layout.
+func (m *DashboardModel) SetSize(width, height int) {
+	m.width = width
+	m.height = height
+}
+
 // AddLogEntry appends a log entry and auto-scrolls to bottom.
 func (m *DashboardModel) AddLogEntry(entryType LogEntryType, message string) {
 	m.Log = append(m.Log, LogEntry{
@@ -178,7 +184,16 @@ func (m DashboardModel) View() string {
 
 	cardsView.WriteString(overall)
 
-	b.WriteString(dashBorder.Render(title + "\n\n" + cardsView.String()))
+	dashStyle := dashBorder
+	logStyle := logBorder
+	if m.width > 0 {
+		// Account for border (2) + padding (4) on each side
+		innerWidth := m.width - 2
+		dashStyle = dashStyle.Width(innerWidth)
+		logStyle = logStyle.Width(innerWidth)
+	}
+
+	b.WriteString(dashStyle.Render(title + "\n\n" + cardsView.String()))
 	b.WriteString("\n")
 
 	// Log section
@@ -210,7 +225,7 @@ func (m DashboardModel) View() string {
 		logView.WriteString("  Waiting for transfers...\n")
 	}
 
-	b.WriteString(logBorder.Render("Log\n" + logView.String()))
+	b.WriteString(logStyle.Render("Log\n" + logView.String()))
 
 	if m.AllDone {
 		b.WriteString("\n\n")

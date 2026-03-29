@@ -101,9 +101,13 @@ func (m FileBrowserModel) Update(msg tea.Msg) (FileBrowserModel, tea.Cmd) {
 				m.newName = ""
 			}
 		case "enter":
-			// Select current directory
+			// Select the highlighted directory
+			selectedPath := m.currentPath
+			if m.cursor > 0 && m.cursor <= len(m.entries) {
+				selectedPath = filepath.Join(m.currentPath, m.entries[m.cursor-1].Name())
+			}
 			return m, func() tea.Msg {
-				return FolderSelectedMsg{Path: m.currentPath}
+				return FolderSelectedMsg{Path: selectedPath}
 			}
 		case "esc":
 			// Go up one level
