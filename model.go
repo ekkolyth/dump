@@ -35,9 +35,10 @@ type model struct {
 	sourceList components.DriveListModel
 
 	// Step 2: Destination drive selection + file browser
-	destList    components.DriveListModel
-	fileBrowser components.FileBrowserModel
-	destPath    string
+	destList       components.DriveListModel
+	destIndexMap   []int // maps dest list indices back to allDrives indices
+	fileBrowser    components.FileBrowserModel
+	destPath       string
 
 	// Step 3: Confirmation
 	selectedSources []DiskInfo
@@ -89,7 +90,6 @@ func initialModel() model {
 		step:       stepSourceSelect,
 		allDrives:  drives,
 		sourceList: components.NewDriveList(driveInfos, true),
-		destList:   components.NewDriveList(driveInfos, false),
 	}
 }
 
@@ -154,9 +154,32 @@ func (m model) updateSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedSources = nil
 		indices := msg.Selected
 		sort.Ints(indices)
+		selectedSet := make(map[int]bool)
 		for _, i := range indices {
 			m.selectedSources = append(m.selectedSources, m.allDrives[i])
+			selectedSet[i] = true
 		}
+
+		// Build dest list excluding selected sources
+		var destDrives []components.DriveInfo
+		m.destIndexMap = nil
+		for i, d := range m.allDrives {
+			if selectedSet[i] {
+				continue
+			}
+			destDrives = append(destDrives, components.DriveInfo{
+				VolumeName:     d.VolumeName,
+				MountPoint:     d.MountPoint,
+				DeviceID:       d.DeviceIdentifier,
+				TotalSize:      FormatSize(d.TotalSize),
+				FreeSpace:      FormatSize(d.EffectiveFreeSpace()),
+				FilesystemName: d.FilesystemName,
+				IsExternal:     d.IsExternal(),
+			})
+			m.destIndexMap = append(m.destIndexMap, i)
+		}
+		m.destList = components.NewDriveList(destDrives, false)
+
 		m.step = stepDestSelect
 		return m, nil
 	default:
@@ -172,7 +195,8 @@ func (m model) updateDestSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case components.DriveSelectedMsg:
 		if len(msg.Selected) > 0 {
-			driveIdx := msg.Selected[0]
+			destIdx := msg.Selected[0]
+			driveIdx := m.destIndexMap[destIdx]
 			mountPoint := m.allDrives[driveIdx].MountPoint
 			m.fileBrowser = components.NewFileBrowser(mountPoint)
 			m.step = stepDestBrowse
