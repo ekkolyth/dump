@@ -1,11 +1,11 @@
 .PHONY: dev build test clean
 
 dev: build
-	./bin/sdcard-dump
+	./bin/dump
 
 build:
 	@mkdir -p bin
-	go build -o bin/sdcard-dump .
+	go build -o bin/dump .
 
 test:
 	go test ./...

@@ -392,6 +392,10 @@ func (m model) View() string {
 
 	switch m.step {
 	case stepSourceSelect:
+		b.WriteString(titleStyle.Render("Welcome to Dump!"))
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("When you just need to take a dump"))
+		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("Step 1/4 — Select Source Cards"))
 		b.WriteString("\n")
 		b.WriteString(m.sourceList.View())
