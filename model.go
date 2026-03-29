@@ -60,7 +60,7 @@ type cardSummary struct {
 }
 
 var (
-	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")).MarginBottom(1)
+	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")).MarginBottom(1)
 	helpStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).MarginTop(1)
 	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	confirmKey = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42"))

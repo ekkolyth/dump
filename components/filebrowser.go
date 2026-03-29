@@ -147,8 +147,8 @@ func (m FileBrowserModel) updateCreating(msg tea.KeyMsg) (FileBrowserModel, tea.
 }
 
 var (
-	breadcrumb   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")).MarginBottom(1)
-	dirCursor    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
+	breadcrumb   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")).MarginBottom(1)
+	dirCursor    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196"))
 	createOption = lipgloss.NewStyle().Foreground(lipgloss.Color("208")).Italic(true)
 	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	inputStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))

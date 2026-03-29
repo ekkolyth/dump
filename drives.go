@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"sort"
+	"strings"
 
 	"howett.net/plist"
 )
@@ -86,6 +87,16 @@ func DiscoverDrives() ([]DiskInfo, error) {
 
 		// Skip whole disks and unmounted volumes
 		if info.WholeDisk || info.MountPoint == "" {
+			continue
+		}
+
+		// Skip macOS system volumes (Preboot, Recovery, VM, Update, etc.)
+		if strings.HasPrefix(info.MountPoint, "/System/Volumes/") {
+			continue
+		}
+
+		// Skip disk images (e.g. mounted .dmg installers)
+		if info.BusProtocol == "Disk Image" {
 			continue
 		}
 

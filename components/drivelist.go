@@ -86,7 +86,7 @@ func (m DriveListModel) Update(msg tea.Msg) (DriveListModel, tea.Cmd) {
 }
 
 var (
-	driveCursor   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
+	driveCursor   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196"))
 	driveSelected = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	driveExtLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
 	driveIntLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
@@ -103,7 +103,7 @@ func (m DriveListModel) View() string {
 
 		check := "[ ] "
 		if m.selected[i] {
-			check = "[x] "
+			check = driveSelected.Render("[✓]") + " "
 		}
 
 		typeLabel := driveIntLabel.Render("INT")
