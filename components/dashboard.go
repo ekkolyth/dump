@@ -104,8 +104,8 @@ func (m *DashboardModel) ScrollDown() {
 }
 
 var (
-	dashBorder    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).Padding(1, 2)
-	logBorder     = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).Padding(0, 1)
+	dashBorder    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("196")).Padding(1, 2)
+	logBorder     = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("196")).Padding(0, 1)
 	progressDone  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	progressTodo  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	cardName      = lipgloss.NewStyle().Bold(true)
@@ -187,10 +187,11 @@ func (m DashboardModel) View() string {
 	dashStyle := dashBorder
 	logStyle := logBorder
 	if m.width > 0 {
-		// Account for border (2) + padding (4) on each side
-		innerWidth := m.width - 2
-		dashStyle = dashStyle.Width(innerWidth)
-		logStyle = logStyle.Width(innerWidth)
+		// Width sets content width; subtract border (2) + horizontal padding to match terminal width
+		// dashBorder has Padding(1,2) = 4 horizontal padding + 2 border = 6
+		dashStyle = dashStyle.Width(m.width - 6)
+		// logBorder has Padding(0,1) = 2 horizontal padding + 2 border = 4
+		logStyle = logStyle.Width(m.width - 4)
 	}
 
 	b.WriteString(dashStyle.Render(title + "\n\n" + cardsView.String()))
