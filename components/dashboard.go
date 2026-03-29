@@ -104,17 +104,17 @@ func (m *DashboardModel) ScrollDown() {
 }
 
 var (
-	dashBorder    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("196")).Padding(1, 2)
-	logBorder     = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("196")).Padding(0, 1)
-	progressDone  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	progressTodo  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	cardName      = lipgloss.NewStyle().Bold(true)
-	speedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	logSuccess    = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	logRetryStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
-	logFailStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	logWarnStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	summaryStyle  = lipgloss.NewStyle().Bold(true).MarginTop(1)
+	dashBorder    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#874BFD")).Padding(1, 2)
+	logBorder     = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#874BFD")).Padding(0, 1)
+	progressDone  = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6AD5"))
+	progressTodo  = lipgloss.NewStyle().Foreground(lipgloss.Color("#3C3C3C"))
+	cardName      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#E8A0BF"))
+	speedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C6C6C"))
+	logSuccess    = lipgloss.NewStyle().Foreground(lipgloss.Color("#AD8CFF"))
+	logRetryStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#E8A0BF"))
+	logFailStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94"))
+	logWarnStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94"))
+	summaryStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5")).MarginTop(1)
 )
 
 func (m DashboardModel) View() string {

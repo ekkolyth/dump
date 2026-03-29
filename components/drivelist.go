@@ -86,10 +86,10 @@ func (m DriveListModel) Update(msg tea.Msg) (DriveListModel, tea.Cmd) {
 }
 
 var (
-	driveCursor   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196"))
-	driveSelected = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	driveExtLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
-	driveIntLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	driveCursor   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5"))
+	driveSelected = lipgloss.NewStyle().Foreground(lipgloss.Color("#AD8CFF"))
+	driveExtLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94")).Bold(true)
+	driveIntLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C6C6C"))
 )
 
 func (m DriveListModel) View() string {

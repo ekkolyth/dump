@@ -61,10 +61,10 @@ type cardSummary struct {
 }
 
 var (
-	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")).MarginBottom(1)
-	helpStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).MarginTop(1)
-	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	confirmKey = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42"))
+	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5")).MarginBottom(1)
+	helpStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C6C6C")).MarginTop(1)
+	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94"))
+	confirmKey = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AD8CFF"))
 )
 
 func initialModel() model {

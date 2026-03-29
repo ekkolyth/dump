@@ -151,12 +151,12 @@ func (m FileBrowserModel) updateCreating(msg tea.KeyMsg) (FileBrowserModel, tea.
 }
 
 var (
-	breadcrumb   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")).MarginBottom(1)
-	dirCursor    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196"))
-	createOption = lipgloss.NewStyle().Foreground(lipgloss.Color("208")).Italic(true)
-	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	inputStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	browserHelp  = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).MarginTop(1)
+	breadcrumb   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5")).MarginBottom(1)
+	dirCursor    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5"))
+	createOption = lipgloss.NewStyle().Foreground(lipgloss.Color("#E8A0BF")).Italic(true)
+	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94"))
+	inputStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#AD8CFF"))
+	browserHelp  = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C6C6C")).MarginTop(1)
 )
 
 func (m FileBrowserModel) View() string {
