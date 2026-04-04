@@ -69,8 +69,8 @@ type cardSummary struct {
 var (
 	titleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5")).MarginBottom(1)
 	titleInline   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5"))
-	helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C6C6C")).MarginTop(1)
-	helpInline    = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C6C6C"))
+	helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MarginTop(1)
+	helpInline    = lipgloss.NewStyle().Foreground(lipgloss.Color("243"))
 	errStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94"))
 	confirmKey = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AD8CFF"))
 )
@@ -359,25 +359,26 @@ func (m model) handleBack() (tea.Model, tea.Cmd) {
 func (m model) updateSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.String() == "r" {
-			m.step = stepResumeSelect
-			var resumeDrives []components.DriveInfo
-			for _, d := range m.allDrives {
-				resumeDrives = append(resumeDrives, components.DriveInfo{
-					VolumeName:     d.VolumeName,
-					MountPoint:     d.MountPoint,
-					DeviceID:       d.DeviceIdentifier,
-					TotalSize:      FormatSize(d.TotalSize),
-					FreeSpace:      FormatSize(d.EffectiveFreeSpace()),
-					FilesystemName: d.FilesystemName,
-					IsExternal:     d.IsExternal(),
-				})
-			}
-			m.destList = components.NewDriveList(resumeDrives, true)
-			return m, nil
+	// Check for resume shortcut before delegating to drive list
+	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "r" {
+		m.step = stepResumeSelect
+		var resumeDrives []components.DriveInfo
+		for _, d := range m.allDrives {
+			resumeDrives = append(resumeDrives, components.DriveInfo{
+				VolumeName:     d.VolumeName,
+				MountPoint:     d.MountPoint,
+				DeviceID:       d.DeviceIdentifier,
+				TotalSize:      FormatSize(d.TotalSize),
+				FreeSpace:      FormatSize(d.EffectiveFreeSpace()),
+				FilesystemName: d.FilesystemName,
+				IsExternal:     d.IsExternal(),
+			})
 		}
+		m.destList = components.NewDriveList(resumeDrives, true)
+		return m, nil
+	}
+
+	switch msg := msg.(type) {
 	case components.DriveSelectedMsg:
 		m.selectedSources = nil
 		indices := msg.Selected
