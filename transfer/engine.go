@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -85,6 +86,8 @@ const (
 	EventFileRetry
 	EventFileFailed
 	EventCardPaused
+	EventCardWaiting
+	EventCardResumed
 	EventAllComplete
 )
 
@@ -171,6 +174,50 @@ func NewEngine(ctx context.Context, cards []CardSource, destBase string, maxConc
 	return e, nil
 }
 
+// waitForVolume polls for a volume matching the session's dump.json.
+// Returns the mount point when found, or error if context is cancelled.
+func (e *Engine) waitForVolume(scanRoot, role string, cardIndex int) (string, error) {
+	for {
+		mount, found := FindVolumeBySession(scanRoot, e.SessionID, role, cardIndex)
+		if found {
+			return mount, nil
+		}
+		select {
+		case <-e.ctx.Done():
+			return "", e.ctx.Err()
+		case <-time.After(2 * time.Second):
+			// poll again
+		}
+	}
+}
+
+// ensureVolume checks if a volume is present via dump.json scan. If missing,
+// emits EventCardWaiting and polls until it reappears or context is cancelled.
+func (e *Engine) ensureVolume(scanRoot, role string, cardIndex int, displayName string) (string, error) {
+	mount, found := FindVolumeBySession(scanRoot, e.SessionID, role, cardIndex)
+	if found {
+		return mount, nil
+	}
+
+	e.Events <- TransferEvent{
+		Type:      EventCardWaiting,
+		CardIndex: cardIndex,
+		Err:       fmt.Errorf("%s disconnected", displayName),
+	}
+
+	mount, err := e.waitForVolume(scanRoot, role, cardIndex)
+	if err != nil {
+		return "", err
+	}
+
+	e.Events <- TransferEvent{
+		Type:      EventCardResumed,
+		CardIndex: cardIndex,
+	}
+
+	return mount, nil
+}
+
 func (e *Engine) Run() {
 	defer close(e.Events)
 
@@ -178,9 +225,21 @@ func (e *Engine) Run() {
 	sem := make(chan struct{}, e.MaxConcurrent)
 
 	for {
+		select {
+		case <-e.ctx.Done():
+			wg.Wait()
+			return
+		default:
+		}
+
 		job := e.queue.Pop()
 		if job == nil {
 			break
+		}
+
+		// Skip already-completed files (for resume)
+		if e.progress.IsComplete(job.CardIndex, job.File.RelPath) {
+			continue
 		}
 
 		sem <- struct{}{}
@@ -199,21 +258,23 @@ func (e *Engine) Run() {
 
 func (e *Engine) processJob(j *TransferJob) {
 	card := &e.Cards[j.CardIndex]
+	scanRoot := VolumesRoot
 
-	if VolumeMissing(card.MountPoint) {
-		e.Events <- TransferEvent{
-			Type:      EventCardPaused,
-			CardIndex: j.CardIndex,
-			File:      j.File,
-			Err:       fmt.Errorf("volume %s disconnected", card.VolumeName),
-		}
-		e.Events <- TransferEvent{
-			Type:      EventFileFailed,
-			CardIndex: j.CardIndex,
-			File:      j.File,
-			Err:       fmt.Errorf("volume %s disconnected", card.VolumeName),
-		}
-		return
+	// Check/wait for source volume
+	newMount, err := e.ensureVolume(scanRoot, "source", j.CardIndex, card.VolumeName)
+	if err != nil {
+		return // context cancelled
+	}
+	if newMount != card.MountPoint {
+		oldMount := card.MountPoint
+		card.MountPoint = newMount
+		j.File.AbsPath = strings.Replace(j.File.AbsPath, oldMount, newMount, 1)
+	}
+
+	// Check/wait for destination volume
+	_, err = e.ensureVolume(scanRoot, "destination", -1, "destination")
+	if err != nil {
+		return // context cancelled
 	}
 
 	destDir := filepath.Dir(j.Dest)
@@ -235,24 +296,38 @@ func (e *Engine) processJob(j *TransferJob) {
 
 	for attempt := 0; attempt <= e.MaxRetries; attempt++ {
 		if attempt > 0 {
-			if VolumeMissing(card.MountPoint) {
-				e.Events <- TransferEvent{
-					Type:      EventCardPaused,
-					CardIndex: j.CardIndex,
-					File:      j.File,
-					Err:       fmt.Errorf("volume %s disconnected", card.VolumeName),
+			// Check if this is a disconnection — if so, wait for reconnect
+			if VolumeMissing(card.MountPoint) || VolumeMissing(e.DestBase) {
+				newMount, err := e.ensureVolume(scanRoot, "source", j.CardIndex, card.VolumeName)
+				if err != nil {
+					return
 				}
-				e.Events <- TransferEvent{
-					Type:      EventFileFailed,
-					CardIndex: j.CardIndex,
-					File:      j.File,
-					Err:       fmt.Errorf("volume disconnected during retry"),
+				if newMount != card.MountPoint {
+					oldMount := card.MountPoint
+					card.MountPoint = newMount
+					j.File.AbsPath = strings.Replace(j.File.AbsPath, oldMount, newMount, 1)
 				}
-				return
+				newDest, err := e.ensureVolume(scanRoot, "destination", -1, "destination")
+				if err != nil {
+					return
+				}
+				if newDest != e.DestBase {
+					oldDest := e.DestBase
+					e.DestBase = newDest
+					j.Dest = strings.Replace(j.Dest, oldDest, newDest, 1)
+					destDir = filepath.Dir(j.Dest)
+					os.MkdirAll(destDir, 0755)
+				}
+				// Reset attempt counter — disconnection isn't a "real" failure
+				attempt = 0
 			}
 
 			backoff := time.Duration(math.Pow(2, float64(attempt-1))) * time.Second
-			time.Sleep(backoff)
+			select {
+			case <-e.ctx.Done():
+				return
+			case <-time.After(backoff):
+			}
 
 			e.Events <- TransferEvent{
 				Type:      EventFileRetry,
@@ -278,6 +353,7 @@ func (e *Engine) processJob(j *TransferJob) {
 				CardIndex: j.CardIndex,
 				File:      j.File,
 			}
+			e.progress.MarkComplete(j.CardIndex, j.File.RelPath)
 			return
 		}
 

@@ -107,3 +107,44 @@ func TestEngine_WritesMetadata(t *testing.T) {
 		t.Errorf("dest role = %q, want %q", destMeta.Role, "destination")
 	}
 }
+
+func TestEngine_WaitForVolume_AlreadyPresent(t *testing.T) {
+	srcDir := t.TempDir()
+	destDir := t.TempDir()
+	os.WriteFile(filepath.Join(srcDir, "test.mp4"), []byte("video"), 0644)
+
+	ctx := context.Background()
+	cards := []CardSource{
+		{MountPoint: srcDir, VolumeName: "TestCard", CardIndex: 0},
+	}
+
+	e, err := NewEngine(ctx, cards, destDir, 2, 3)
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+
+	// Source dump.json already written by NewEngine, volume is present
+	scanRoot := filepath.Dir(srcDir)
+	mount, err := e.waitForVolume(scanRoot, "source", 0)
+	if err != nil {
+		t.Fatalf("waitForVolume: %v", err)
+	}
+	if mount != srcDir {
+		t.Errorf("mount = %q, want %q", mount, srcDir)
+	}
+}
+
+func TestEngine_WaitForVolume_Cancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	e := &Engine{
+		SessionID: "nosuchsession",
+		ctx:       ctx,
+	}
+
+	_, err := e.waitForVolume(t.TempDir(), "source", 0)
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+}
