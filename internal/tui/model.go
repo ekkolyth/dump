@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mikekenway/sdcard-dump/internal/components"
-	driveutil "github.com/mikekenway/sdcard-dump/internal/drives"
-	"github.com/mikekenway/sdcard-dump/internal/transfer"
+	"github.com/ekkolyth/dump/internal/components"
+	driveutil "github.com/ekkolyth/dump/internal/drives"
+	"github.com/ekkolyth/dump/internal/transfer"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mikekenway/sdcard-dump/internal/tui"
+	"github.com/ekkolyth/dump/internal/tui"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

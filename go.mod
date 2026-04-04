@@ -1,4 +1,4 @@
-module github.com/mikekenway/sdcard-dump
+module github.com/ekkolyth/dump
 
 go 1.25.1
 

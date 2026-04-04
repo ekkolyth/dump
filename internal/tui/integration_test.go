@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mikekenway/sdcard-dump/internal/transfer"
+	"github.com/ekkolyth/dump/internal/transfer"
 )
 
 func TestIntegration_DiscoverAndTransfer(t *testing.T) {
