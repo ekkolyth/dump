@@ -641,7 +641,8 @@ func (m model) View() string {
 	case stepSourceSelect:
 		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("space: toggle | enter: select | esc: quit"))
 		b.WriteString("\n")
-		b.WriteString(helpInline.Render("Welcome, Mel and/or Cass!"))
+		b.WriteString("\n")
+		b.WriteString("Welcome, Mel and/or Cass!")
 		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("New Dump — Select Source Cards"))
 		b.WriteString("\n")
