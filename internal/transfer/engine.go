@@ -18,7 +18,7 @@ type CardSource struct {
 	MountPoint string
 	VolumeName string
 	CardIndex  int
-	FolderName string // destination folder name, e.g. "26.04.04 - CLIENT - EVENT - CARD 1"
+	FolderName string // card folder name, e.g. "CARD 1"
 	Files      []MediaFile
 	TotalFiles int
 	TotalBytes int64
@@ -95,6 +95,7 @@ const (
 type Engine struct {
 	Cards         []CardSource
 	DestBase      string
+	EventFolder   string // parent folder for all cards, e.g. "26.04.04 - CLIENT - EVENT"
 	MaxConcurrent int
 	MaxRetries    int
 	SessionID     string
@@ -105,9 +106,10 @@ type Engine struct {
 	mu            sync.RWMutex // protects Cards[].MountPoint and DestBase
 }
 
-func NewEngine(ctx context.Context, cards []CardSource, destBase string, maxConcurrent, maxRetries int) (*Engine, error) {
+func NewEngine(ctx context.Context, cards []CardSource, destBase, eventFolder string, maxConcurrent, maxRetries int) (*Engine, error) {
 	e := &Engine{
 		DestBase:      destBase,
+		EventFolder:   eventFolder,
 		MaxConcurrent: maxConcurrent,
 		MaxRetries:    maxRetries,
 		Events:        make(chan TransferEvent, 100),
@@ -130,11 +132,11 @@ func NewEngine(ctx context.Context, cards []CardSource, destBase string, maxConc
 		cards[i].TotalBytes = totalBytes
 
 		cardDir := cards[i].FolderName
-			if cardDir == "" {
-				cardDir = fmt.Sprintf("card-%d-%s", cards[i].CardIndex+1, cards[i].VolumeName)
-			}
+		if cardDir == "" {
+			cardDir = fmt.Sprintf("CARD %d", cards[i].CardIndex+1)
+		}
 		for _, f := range files {
-			dest := filepath.Join(destBase, cardDir, f.RelPath)
+			dest := filepath.Join(destBase, eventFolder, cardDir, f.RelPath)
 			e.queue.Push(&TransferJob{
 				File:      f,
 				CardIndex: cards[i].CardIndex,
@@ -182,9 +184,10 @@ func NewEngine(ctx context.Context, cards []CardSource, destBase string, maxConc
 // NewEngineResume creates an engine that resumes an existing session.
 // It uses the existing session ID and skips writing new dump.json files.
 // Already-completed files (from dump-progress.json) are skipped during Run().
-func NewEngineResume(ctx context.Context, sessionID string, cards []CardSource, destBase string, maxConcurrent, maxRetries int) (*Engine, error) {
+func NewEngineResume(ctx context.Context, sessionID string, cards []CardSource, destBase, eventFolder string, maxConcurrent, maxRetries int) (*Engine, error) {
 	e := &Engine{
 		DestBase:      destBase,
+		EventFolder:   eventFolder,
 		MaxConcurrent: maxConcurrent,
 		MaxRetries:    maxRetries,
 		SessionID:     sessionID,
@@ -211,11 +214,11 @@ func NewEngineResume(ctx context.Context, sessionID string, cards []CardSource, 
 		cards[i].TotalBytes = totalBytes
 
 		cardDir := cards[i].FolderName
-			if cardDir == "" {
-				cardDir = fmt.Sprintf("card-%d-%s", cards[i].CardIndex+1, cards[i].VolumeName)
-			}
+		if cardDir == "" {
+			cardDir = fmt.Sprintf("CARD %d", cards[i].CardIndex+1)
+		}
 		for _, f := range files {
-			dest := filepath.Join(destBase, cardDir, f.RelPath)
+			dest := filepath.Join(destBase, eventFolder, cardDir, f.RelPath)
 			e.queue.Push(&TransferJob{
 				File:      f,
 				CardIndex: cards[i].CardIndex,

@@ -51,7 +51,7 @@ func TestEngineCreation(t *testing.T) {
 	// Create a media file
 	os.WriteFile(tmpDir+"/test.mp4", []byte("video"), 0644)
 
-	e, err := NewEngine(context.Background(), cards, t.TempDir(), 2, 3)
+	e, err := NewEngine(context.Background(), cards, t.TempDir(), "", 2, 3)
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestEngine_WritesMetadata(t *testing.T) {
 		{MountPoint: srcDir, VolumeName: "TestCard", CardIndex: 0},
 	}
 
-	e, err := NewEngine(context.Background(), cards, destDir, 2, 3)
+	e, err := NewEngine(context.Background(), cards, destDir, "", 2, 3)
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestEngine_WaitForVolume_AlreadyPresent(t *testing.T) {
 		{MountPoint: srcDir, VolumeName: "TestCard", CardIndex: 0},
 	}
 
-	e, err := NewEngine(ctx, cards, destDir, 2, 3)
+	e, err := NewEngine(ctx, cards, destDir, "", 2, 3)
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
 	}

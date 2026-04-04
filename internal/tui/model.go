@@ -149,7 +149,7 @@ func ResumeModel(sessionID string) model {
 
 	// Create engine with existing session
 	ctx, cancel := context.WithCancel(context.Background())
-	engine, err := transfer.NewEngineResume(ctx, sessionID, cards, dest.MountPoint, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
+	engine, err := transfer.NewEngineResume(ctx, sessionID, cards, dest.MountPoint, "", transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
 	if err != nil {
 		cancel()
 		return model{err: fmt.Sprintf("Resume failed: %v", err)}
@@ -240,7 +240,7 @@ func (m model) updateResumeSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
-		engine, err := transfer.NewEngineResume(ctx, sessionID, sources, destPath, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
+		engine, err := transfer.NewEngineResume(ctx, sessionID, sources, destPath, "", transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
 		if err != nil {
 			cancel()
 			m.err = fmt.Sprintf("Resume failed: %v", err)
@@ -531,18 +531,21 @@ func (m model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) startTransfer() (tea.Model, tea.Cmd) {
+	now := time.Now()
+	eventFolder := fmt.Sprintf("%s - %s - %s", now.Format("06.01.02"), m.clientName, m.eventName)
+
 	cards := make([]transfer.CardSource, len(m.selectedSources))
 	for i, src := range m.selectedSources {
 		cards[i] = transfer.CardSource{
 			MountPoint: src.MountPoint,
 			VolumeName: src.VolumeName,
 			CardIndex:  i,
-			FolderName: m.cardSummaries[i].Name,
+			FolderName: fmt.Sprintf("CARD %d", i+1),
 		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	engine, err := transfer.NewEngine(ctx, cards, m.destPath, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
+	engine, err := transfer.NewEngine(ctx, cards, m.destPath, eventFolder, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
 	if err != nil {
 		cancel()
 		m.err = err.Error()
