@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "miso-config": {
+      "source": "ekkolyth/miso",
+      "ref": "main",
+      "sourceType": "github",
+      "computedHash": "89121da22fb7e724899146b58d62588570015094373e8fcb7df7bfc5c2e4df91"
+    },
+    "miso-env": {
+      "source": "ekkolyth/miso",
+      "ref": "main",
+      "sourceType": "github",
+      "computedHash": "3c8b93761698c9636c250a8a5cc6485608826c20993c8daddce4e69e47b7fbfc"
+    },
+    "miso-scripting": {
+      "source": "ekkolyth/miso",
+      "ref": "main",
+      "sourceType": "github",
+      "computedHash": "ddbe2f09f6d26fa9429fcc770b2bd5c9f66c1b13fa6129e5fe30f9f724df0191"
+    },
+    "miso-tui": {
+      "source": "ekkolyth/miso",
+      "ref": "main",
+      "sourceType": "github",
+      "computedHash": "0d0f5e9a2d51719f4b05da104093e93158183e718b257a871d84742594640dab"
+    }
+  }
+}
