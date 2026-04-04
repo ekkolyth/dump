@@ -20,6 +20,8 @@ type wizardStep int
 const (
 	stepSourceSelect wizardStep = iota
 	stepDestSelect
+	stepClientInput
+	stepEventInput
 	stepConfirm
 	stepResumeSelect
 	stepTransfer
@@ -42,7 +44,12 @@ type model struct {
 	destIndexMap []int // maps dest list indices back to allDrives indices
 	destPath     string
 
-	// Step 3: Confirmation
+	// Step 3-4: Client and event name input
+	clientName string
+	eventName  string
+	textInput  string // current text input buffer
+
+	// Step 5: Confirmation
 	selectedSources []driveutil.DiskInfo
 	cardSummaries   []cardSummary
 
@@ -335,6 +342,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateSourceSelect(msg)
 	case stepDestSelect:
 		return m.updateDestSelect(msg)
+	case stepClientInput:
+		return m.updateClientInput(msg)
+	case stepEventInput:
+		return m.updateEventInput(msg)
 	case stepConfirm:
 		return m.updateConfirm(msg)
 	case stepResumeSelect:
@@ -352,8 +363,12 @@ func (m model) handleBack() (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case stepDestSelect:
 		m.step = stepSourceSelect
-	case stepConfirm:
+	case stepClientInput:
 		m.step = stepDestSelect
+	case stepEventInput:
+		m.step = stepClientInput
+	case stepConfirm:
+		m.step = stepEventInput
 	case stepResumeSelect:
 		m.step = stepSourceSelect
 	}
@@ -431,20 +446,8 @@ func (m model) updateDestSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 			driveIdx := m.destIndexMap[destIdx]
 			mountPoint := m.allDrives[driveIdx].MountPoint
 			m.destPath = mountPoint
-			m.cardSummaries = nil
-			for i, src := range m.selectedSources {
-				files, _ := transfer.DiscoverMediaFiles(src.MountPoint)
-				var totalBytes int64
-				for _, f := range files {
-					totalBytes += f.Size
-				}
-				m.cardSummaries = append(m.cardSummaries, cardSummary{
-					Name:       fmt.Sprintf("card-%d-%s", i+1, src.VolumeName),
-					FileCount:  len(files),
-					TotalBytes: totalBytes,
-				})
-			}
-			m.step = stepConfirm
+			m.textInput = ""
+			m.step = stepClientInput
 		}
 		return m, nil
 	default:
@@ -454,6 +457,68 @@ func (m model) updateDestSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+
+func (m model) updateClientInput(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "enter":
+			if m.textInput != "" {
+				m.clientName = m.textInput
+				m.textInput = ""
+				m.step = stepEventInput
+			}
+		case "backspace":
+			if len(m.textInput) > 0 {
+				m.textInput = m.textInput[:len(m.textInput)-1]
+			}
+		default:
+			if len(msg.String()) == 1 {
+				m.textInput += msg.String()
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m model) updateEventInput(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "enter":
+			if m.textInput != "" {
+				m.eventName = m.textInput
+				m.textInput = ""
+				// Now build card summaries and go to confirm
+				m.cardSummaries = nil
+				now := time.Now()
+				datePrefix := fmt.Sprintf("%s - %s - %s", now.Format("06.01.02"), m.clientName, m.eventName)
+				for i, src := range m.selectedSources {
+					files, _ := transfer.DiscoverMediaFiles(src.MountPoint)
+					var totalBytes int64
+					for _, f := range files {
+						totalBytes += f.Size
+					}
+					m.cardSummaries = append(m.cardSummaries, cardSummary{
+						Name:       fmt.Sprintf("%s - CARD %d", datePrefix, i+1),
+						FileCount:  len(files),
+						TotalBytes: totalBytes,
+					})
+				}
+				m.step = stepConfirm
+			}
+		case "backspace":
+			if len(m.textInput) > 0 {
+				m.textInput = m.textInput[:len(m.textInput)-1]
+			}
+		default:
+			if len(msg.String()) == 1 {
+				m.textInput += msg.String()
+			}
+		}
+	}
+	return m, nil
+}
 
 func (m model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -472,6 +537,7 @@ func (m model) startTransfer() (tea.Model, tea.Cmd) {
 			MountPoint: src.MountPoint,
 			VolumeName: src.VolumeName,
 			CardIndex:  i,
+			FolderName: m.cardSummaries[i].Name,
 		}
 	}
 
@@ -664,6 +730,22 @@ func (m model) View() string {
 		b.WriteString(titleStyle.Render("Select Destination Drive"))
 		b.WriteString("\n")
 		b.WriteString(m.destList.View())
+
+	case stepClientInput:
+		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("type client name | enter: confirm | esc: back"))
+		b.WriteString("\n")
+		b.WriteString(titleStyle.Render("Client Name"))
+		b.WriteString("\n")
+		b.WriteString(fmt.Sprintf("  > %s█", m.textInput))
+
+	case stepEventInput:
+		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("type event name | enter: confirm | esc: back"))
+		b.WriteString("\n")
+		b.WriteString(titleStyle.Render("Event Name"))
+		b.WriteString("\n")
+		b.WriteString(helpInline.Render(fmt.Sprintf("  Client: %s", m.clientName)))
+		b.WriteString("\n\n")
+		b.WriteString(fmt.Sprintf("  > %s█", m.textInput))
 
 	case stepConfirm:
 		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("enter: start import | esc: back"))

@@ -18,6 +18,7 @@ type CardSource struct {
 	MountPoint string
 	VolumeName string
 	CardIndex  int
+	FolderName string // destination folder name, e.g. "26.04.04 - CLIENT - EVENT - CARD 1"
 	Files      []MediaFile
 	TotalFiles int
 	TotalBytes int64
@@ -128,7 +129,10 @@ func NewEngine(ctx context.Context, cards []CardSource, destBase string, maxConc
 		}
 		cards[i].TotalBytes = totalBytes
 
-		cardDir := fmt.Sprintf("card-%d-%s", cards[i].CardIndex+1, cards[i].VolumeName)
+		cardDir := cards[i].FolderName
+			if cardDir == "" {
+				cardDir = fmt.Sprintf("card-%d-%s", cards[i].CardIndex+1, cards[i].VolumeName)
+			}
 		for _, f := range files {
 			dest := filepath.Join(destBase, cardDir, f.RelPath)
 			e.queue.Push(&TransferJob{
@@ -206,7 +210,10 @@ func NewEngineResume(ctx context.Context, sessionID string, cards []CardSource, 
 		}
 		cards[i].TotalBytes = totalBytes
 
-		cardDir := fmt.Sprintf("card-%d-%s", cards[i].CardIndex+1, cards[i].VolumeName)
+		cardDir := cards[i].FolderName
+			if cardDir == "" {
+				cardDir = fmt.Sprintf("card-%d-%s", cards[i].CardIndex+1, cards[i].VolumeName)
+			}
 		for _, f := range files {
 			dest := filepath.Join(destBase, cardDir, f.RelPath)
 			e.queue.Push(&TransferJob{
