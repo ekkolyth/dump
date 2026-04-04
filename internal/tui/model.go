@@ -717,7 +717,7 @@ func (m model) View() string {
 
 	case stepResumeSelect:
 		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("space: toggle | enter: confirm | esc: back"))
-		b.WriteString("\n")
+		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("Resume Session — Select Drives"))
 		b.WriteString("\n")
 		b.WriteString(helpStyle.Render("Select all drives that belong to the session"))
@@ -726,22 +726,22 @@ func (m model) View() string {
 
 	case stepDestSelect:
 		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("space: select | enter: confirm | esc: back"))
-		b.WriteString("\n")
-		b.WriteString(titleStyle.Render("Select Destination Drive"))
+		b.WriteString("\n\n")
+		b.WriteString(titleStyle.Render("Step 2 — Select Destination Drive"))
 		b.WriteString("\n")
 		b.WriteString(m.destList.View())
 
 	case stepClientInput:
 		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("type client name | enter: confirm | esc: back"))
-		b.WriteString("\n")
-		b.WriteString(titleStyle.Render("Client Name"))
-		b.WriteString("\n")
+		b.WriteString("\n\n")
+		b.WriteString(titleStyle.Render("Step 3 — Client Name"))
+		b.WriteString("\n\n")
 		b.WriteString(fmt.Sprintf("  > %s█", m.textInput))
 
 	case stepEventInput:
 		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("type event name | enter: confirm | esc: back"))
-		b.WriteString("\n")
-		b.WriteString(titleStyle.Render("Event Name"))
+		b.WriteString("\n\n")
+		b.WriteString(titleStyle.Render("Step 4 — Event Name"))
 		b.WriteString("\n")
 		b.WriteString(helpInline.Render(fmt.Sprintf("  Client: %s", m.clientName)))
 		b.WriteString("\n\n")
@@ -749,8 +749,8 @@ func (m model) View() string {
 
 	case stepConfirm:
 		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("enter: start import | esc: back"))
-		b.WriteString("\n")
-		b.WriteString(titleStyle.Render("Confirm Import"))
+		b.WriteString("\n\n")
+		b.WriteString(titleStyle.Render("Step 5 — Confirm Import"))
 		b.WriteString("\n\n")
 
 		b.WriteString("  Sources:\n")
