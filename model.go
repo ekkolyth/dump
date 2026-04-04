@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mikekenway/sdcard-dump/components"
 	"github.com/mikekenway/sdcard-dump/transfer"
@@ -44,8 +45,13 @@ type model struct {
 	cardSummaries   []cardSummary
 
 	// Step 4: Transfer
-	dashboard components.DashboardModel
-	engine    *transfer.Engine
+	dashboard    components.DashboardModel
+	engine       *transfer.Engine
+	cancelEngine context.CancelFunc
+	sessionID    string
+
+	// Ctrl+C tracking
+	lastCtrlC time.Time
 
 	// Layout
 	width  int
@@ -106,6 +112,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
+			if m.step == stepTransfer && !m.dashboard.AllDone {
+				now := time.Now()
+				if !m.lastCtrlC.IsZero() && now.Sub(m.lastCtrlC) < 3*time.Second {
+					// Double Ctrl+C — exit with resume code
+					if m.cancelEngine != nil {
+						m.cancelEngine()
+					}
+					return m, tea.Sequence(
+						tea.Printf("\nTo resume this session: dump --resume %s\n", m.sessionID),
+						tea.Quit,
+					)
+				}
+				// First Ctrl+C — cancel engine, go back to source select
+				m.lastCtrlC = now
+				if m.cancelEngine != nil {
+					m.cancelEngine()
+				}
+				m.step = stepSourceSelect
+				m.engine = nil
+				m.cancelEngine = nil
+				return m, nil
+			}
 			return m, tea.Quit
 		case "esc":
 			return m.handleBack()
@@ -239,8 +267,10 @@ func (m model) startTransfer() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	engine, err := transfer.NewEngine(context.Background(), cards, m.destPath, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
+	ctx, cancel := context.WithCancel(context.Background())
+	engine, err := transfer.NewEngine(ctx, cards, m.destPath, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
 	if err != nil {
+		cancel()
 		m.err = err.Error()
 		return m, nil
 	}
@@ -256,6 +286,8 @@ func (m model) startTransfer() (tea.Model, tea.Cmd) {
 	}
 
 	m.engine = engine
+	m.cancelEngine = cancel
+	m.sessionID = engine.SessionID
 	m.dashboard = components.NewDashboard(dashCards)
 	m.step = stepTransfer
 
@@ -277,6 +309,13 @@ func (m model) updateTransfer(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if evt.Type == transfer.EventAllComplete {
 			m.dashboard.AllDone = true
+			if m.engine != nil {
+				for _, card := range m.engine.Cards {
+					transfer.RemoveDumpMetadata(card.MountPoint)
+				}
+				transfer.RemoveDumpMetadata(m.engine.DestBase)
+				transfer.RemoveProgressFile(m.engine.DestBase)
+			}
 			return m, nil
 		}
 
@@ -348,6 +387,18 @@ func (m *model) applyTransferEvent(evt transfer.TransferEvent) {
 		card.Paused = true
 		m.dashboard.AddLogEntry(components.LogWarning,
 			fmt.Sprintf("%s: volume disconnected", card.VolumeName))
+
+	case transfer.EventCardWaiting:
+		card.Waiting = true
+		card.WaitingFor = card.VolumeName
+		m.dashboard.AddLogEntry(components.LogWarning,
+			fmt.Sprintf("%s: waiting for reconnection...", card.VolumeName))
+
+	case transfer.EventCardResumed:
+		card.Waiting = false
+		card.WaitingFor = ""
+		m.dashboard.AddLogEntry(components.LogReconnected,
+			fmt.Sprintf("%s: reconnected, resuming transfer", card.VolumeName))
 	}
 }
 

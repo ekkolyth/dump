@@ -21,6 +21,8 @@ type CardProgress struct {
 	CurrentSpeed   string
 	CurrentPct     int
 	Paused         bool
+	Waiting        bool
+	WaitingFor     string
 	Done           bool
 }
 
@@ -38,6 +40,7 @@ const (
 	LogRetry
 	LogFailed
 	LogWarning
+	LogReconnected
 )
 
 // DashboardModel displays transfer progress and a scrollable log.
@@ -155,6 +158,8 @@ func (m DashboardModel) View() string {
 			} else {
 				cardsView.WriteString(progressDone.Render("    ✓ Complete") + "\n")
 			}
+		} else if c.Waiting {
+			cardsView.WriteString(logWarnStyle.Render(fmt.Sprintf("    ⏳ Waiting for %s to reconnect...", c.WaitingFor)) + "\n")
 		} else if c.Paused {
 			cardsView.WriteString(logWarnStyle.Render("    ⚠ Volume disconnected") + "\n")
 		} else if c.CurrentFile != "" {
@@ -218,6 +223,8 @@ func (m DashboardModel) View() string {
 			prefix = logFailStyle.Render("  ✗")
 		case LogWarning:
 			prefix = logWarnStyle.Render("  ⚠")
+		case LogReconnected:
+			prefix = logSuccess.Render("  ↻")
 		}
 		logView.WriteString(fmt.Sprintf("%s %s\n", prefix, entry.Message))
 	}
