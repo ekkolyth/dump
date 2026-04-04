@@ -17,8 +17,7 @@ import (
 type wizardStep int
 
 const (
-	stepHome         wizardStep = iota
-	stepSourceSelect
+	stepSourceSelect wizardStep = iota
 	stepDestSelect
 	stepConfirm
 	stepResumeSelect
@@ -94,7 +93,7 @@ func initialModel() model {
 	}
 
 	return model{
-		step:       stepHome,
+		step:       stepSourceSelect,
 		allDrives:  drives,
 		sourceList: components.NewDriveList(driveInfos, true),
 	}
@@ -162,31 +161,6 @@ func resumeModel(sessionID string) model {
 	}
 }
 
-func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "1", "n":
-			m.step = stepSourceSelect
-		case "2", "r":
-			m.step = stepResumeSelect
-			var resumeDrives []components.DriveInfo
-			for _, d := range m.allDrives {
-				resumeDrives = append(resumeDrives, components.DriveInfo{
-					VolumeName:     d.VolumeName,
-					MountPoint:     d.MountPoint,
-					DeviceID:       d.DeviceIdentifier,
-					TotalSize:      FormatSize(d.TotalSize),
-					FreeSpace:      FormatSize(d.EffectiveFreeSpace()),
-					FilesystemName: d.FilesystemName,
-					IsExternal:     d.IsExternal(),
-				})
-			}
-			m.destList = components.NewDriveList(resumeDrives, true)
-		}
-	}
-	return m, nil
-}
 
 func (m model) updateResumeSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -213,7 +187,7 @@ func (m model) updateResumeSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if len(sessions) == 0 {
 			m.err = "No session data found on selected drives"
-			m.step = stepHome
+			m.step = stepSourceSelect
 			return m, nil
 		}
 
@@ -243,12 +217,12 @@ func (m model) updateResumeSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if destPath == "" {
 			m.err = "No destination drive found in selection"
-			m.step = stepHome
+			m.step = stepSourceSelect
 			return m, nil
 		}
 		if len(sources) == 0 {
 			m.err = "No source drives found in selection"
-			m.step = stepHome
+			m.step = stepSourceSelect
 			return m, nil
 		}
 
@@ -257,7 +231,7 @@ func (m model) updateResumeSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if err != nil {
 			cancel()
 			m.err = fmt.Sprintf("Resume failed: %v", err)
-			m.step = stepHome
+			m.step = stepSourceSelect
 			return m, nil
 		}
 
@@ -335,7 +309,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.cancelEngine != nil {
 					m.cancelEngine()
 				}
-				m.step = stepHome
+				m.step = stepSourceSelect
 				m.engine = nil
 				m.cancelEngine = nil
 				return m, nil
@@ -351,8 +325,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.step {
-	case stepHome:
-		return m.updateHome(msg)
 	case stepSourceSelect:
 		return m.updateSourceSelect(msg)
 	case stepDestSelect:
@@ -370,16 +342,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) handleBack() (tea.Model, tea.Cmd) {
 	switch m.step {
-	case stepHome:
-		return m, tea.Quit
 	case stepSourceSelect:
-		m.step = stepHome
+		return m, tea.Quit
 	case stepDestSelect:
 		m.step = stepSourceSelect
 	case stepConfirm:
 		m.step = stepDestSelect
 	case stepResumeSelect:
-		m.step = stepHome
+		m.step = stepSourceSelect
 	}
 	return m, nil
 }
@@ -388,6 +358,24 @@ func (m model) updateSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "r" {
+			m.step = stepResumeSelect
+			var resumeDrives []components.DriveInfo
+			for _, d := range m.allDrives {
+				resumeDrives = append(resumeDrives, components.DriveInfo{
+					VolumeName:     d.VolumeName,
+					MountPoint:     d.MountPoint,
+					DeviceID:       d.DeviceIdentifier,
+					TotalSize:      FormatSize(d.TotalSize),
+					FreeSpace:      FormatSize(d.EffectiveFreeSpace()),
+					FilesystemName: d.FilesystemName,
+					IsExternal:     d.IsExternal(),
+				})
+			}
+			m.destList = components.NewDriveList(resumeDrives, true)
+			return m, nil
+		}
 	case components.DriveSelectedMsg:
 		m.selectedSources = nil
 		indices := msg.Selected
@@ -645,21 +633,15 @@ func (m model) View() string {
 	var b strings.Builder
 
 	switch m.step {
-	case stepHome:
+	case stepSourceSelect:
 		b.WriteString(titleStyle.Render("Welcome to Dump!"))
 		b.WriteString("\n")
 		b.WriteString(helpStyle.Render("When you just need to take a dump"))
 		b.WriteString("\n\n")
-		b.WriteString("  " + confirmKey.Render("[1]") + " New Session\n")
-		b.WriteString("  " + confirmKey.Render("[2]") + " Resume Session\n")
-		b.WriteString("\n")
-		b.WriteString(helpStyle.Render("Press 1 or 2 to choose • esc: quit"))
-
-	case stepSourceSelect:
 		b.WriteString(titleStyle.Render("Step 1/3 — Select Source Cards"))
 		b.WriteString("\n")
 		b.WriteString(m.sourceList.View())
-		b.WriteString(helpStyle.Render("space: toggle • enter: confirm • esc: back"))
+		b.WriteString(helpStyle.Render("space: toggle • enter: confirm • r: resume session • esc: quit"))
 
 	case stepResumeSelect:
 		b.WriteString(titleStyle.Render("Resume Session — Select Drives"))
