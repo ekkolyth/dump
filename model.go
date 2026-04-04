@@ -17,9 +17,11 @@ import (
 type wizardStep int
 
 const (
-	stepSourceSelect wizardStep = iota
+	stepHome         wizardStep = iota
+	stepSourceSelect
 	stepDestSelect
 	stepConfirm
+	stepResumeSelect
 	stepTransfer
 )
 
@@ -92,7 +94,7 @@ func initialModel() model {
 	}
 
 	return model{
-		step:       stepSourceSelect,
+		step:       stepHome,
 		allDrives:  drives,
 		sourceList: components.NewDriveList(driveInfos, true),
 	}
@@ -160,6 +162,138 @@ func resumeModel(sessionID string) model {
 	}
 }
 
+func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "1", "n":
+			m.step = stepSourceSelect
+		case "2", "r":
+			m.step = stepResumeSelect
+			var resumeDrives []components.DriveInfo
+			for _, d := range m.allDrives {
+				resumeDrives = append(resumeDrives, components.DriveInfo{
+					VolumeName:     d.VolumeName,
+					MountPoint:     d.MountPoint,
+					DeviceID:       d.DeviceIdentifier,
+					TotalSize:      FormatSize(d.TotalSize),
+					FreeSpace:      FormatSize(d.EffectiveFreeSpace()),
+					FilesystemName: d.FilesystemName,
+					IsExternal:     d.IsExternal(),
+				})
+			}
+			m.destList = components.NewDriveList(resumeDrives, true)
+		}
+	}
+	return m, nil
+}
+
+func (m model) updateResumeSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case components.DriveSelectedMsg:
+		if len(msg.Selected) == 0 {
+			return m, nil
+		}
+
+		// Read dump.json from each selected drive, group by session
+		sessions := make(map[string][]transfer.VolumeMatch)
+		for _, idx := range msg.Selected {
+			drive := m.allDrives[idx]
+			meta, err := transfer.ReadDumpMetadata(drive.MountPoint)
+			if err != nil {
+				continue
+			}
+			sessions[meta.SessionID] = append(sessions[meta.SessionID], transfer.VolumeMatch{
+				MountPoint: drive.MountPoint,
+				Meta:       meta,
+			})
+		}
+
+		if len(sessions) == 0 {
+			m.err = "No session data found on selected drives"
+			m.step = stepHome
+			return m, nil
+		}
+
+		// Use the first session found
+		var sessionID string
+		var matches []transfer.VolumeMatch
+		for id, vol := range sessions {
+			sessionID = id
+			matches = vol
+			break
+		}
+
+		// Separate sources and destination
+		var sources []transfer.CardSource
+		var destPath string
+		for _, match := range matches {
+			if match.Meta.Role == "destination" {
+				destPath = match.MountPoint
+			} else if match.Meta.Role == "source" {
+				sources = append(sources, transfer.CardSource{
+					MountPoint: match.MountPoint,
+					VolumeName: match.Meta.CardName,
+					CardIndex:  match.Meta.CardIndex,
+				})
+			}
+		}
+
+		if destPath == "" {
+			m.err = "No destination drive found in selection"
+			m.step = stepHome
+			return m, nil
+		}
+		if len(sources) == 0 {
+			m.err = "No source drives found in selection"
+			m.step = stepHome
+			return m, nil
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		engine, err := transfer.NewEngineResume(ctx, sessionID, sources, destPath, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
+		if err != nil {
+			cancel()
+			m.err = fmt.Sprintf("Resume failed: %v", err)
+			m.step = stepHome
+			return m, nil
+		}
+
+		m.engine = engine
+		m.cancelEngine = cancel
+		m.sessionID = sessionID
+
+		dashCards := make([]components.CardProgress, len(engine.Cards))
+		for i, c := range engine.Cards {
+			dashCards[i] = components.CardProgress{
+				CardName:   fmt.Sprintf("card-%d", c.CardIndex+1),
+				VolumeName: c.VolumeName,
+				TotalFiles: c.TotalFiles,
+				TotalBytes: c.TotalBytes,
+			}
+		}
+		m.dashboard = components.NewDashboard(dashCards)
+		m.dashboard.SetSize(m.width, m.height)
+		m.step = stepTransfer
+
+		return m, func() tea.Msg {
+			go m.engine.Run()
+			evt, ok := <-m.engine.Events
+			if !ok {
+				return transferEventMsg{Type: transfer.EventAllComplete}
+			}
+			return transferEventMsg(evt)
+		}
+
+	default:
+		m.destList, cmd = m.destList.Update(msg)
+	}
+
+	return m, cmd
+}
+
 func (m model) Init() tea.Cmd {
 	if m.step == stepTransfer && m.engine != nil {
 		return func() tea.Msg {
@@ -201,7 +335,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.cancelEngine != nil {
 					m.cancelEngine()
 				}
-				m.step = stepSourceSelect
+				m.step = stepHome
 				m.engine = nil
 				m.cancelEngine = nil
 				return m, nil
@@ -217,12 +351,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.step {
+	case stepHome:
+		return m.updateHome(msg)
 	case stepSourceSelect:
 		return m.updateSourceSelect(msg)
 	case stepDestSelect:
 		return m.updateDestSelect(msg)
 	case stepConfirm:
 		return m.updateConfirm(msg)
+	case stepResumeSelect:
+		return m.updateResumeSelect(msg)
 	case stepTransfer:
 		return m.updateTransfer(msg)
 	}
@@ -232,12 +370,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) handleBack() (tea.Model, tea.Cmd) {
 	switch m.step {
-	case stepSourceSelect:
+	case stepHome:
 		return m, tea.Quit
+	case stepSourceSelect:
+		m.step = stepHome
 	case stepDestSelect:
 		m.step = stepSourceSelect
 	case stepConfirm:
 		m.step = stepDestSelect
+	case stepResumeSelect:
+		m.step = stepHome
 	}
 	return m, nil
 }
@@ -495,15 +637,29 @@ func (m model) View() string {
 	var b strings.Builder
 
 	switch m.step {
-	case stepSourceSelect:
+	case stepHome:
 		b.WriteString(titleStyle.Render("Welcome to Dump!"))
 		b.WriteString("\n")
 		b.WriteString(helpStyle.Render("When you just need to take a dump"))
 		b.WriteString("\n\n")
+		b.WriteString("  " + confirmKey.Render("[1]") + " New Session\n")
+		b.WriteString("  " + confirmKey.Render("[2]") + " Resume Session\n")
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("Press 1 or 2 to choose • esc: quit"))
+
+	case stepSourceSelect:
 		b.WriteString(titleStyle.Render("Step 1/3 — Select Source Cards"))
 		b.WriteString("\n")
 		b.WriteString(m.sourceList.View())
-		b.WriteString(helpStyle.Render("space: toggle • enter: confirm • esc: quit"))
+		b.WriteString(helpStyle.Render("space: toggle • enter: confirm • esc: back"))
+
+	case stepResumeSelect:
+		b.WriteString(titleStyle.Render("Resume Session — Select Drives"))
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("Select all drives that belong to the session"))
+		b.WriteString("\n\n")
+		b.WriteString(m.destList.View())
+		b.WriteString(helpStyle.Render("space: toggle • enter: confirm • esc: back"))
 
 	case stepDestSelect:
 		b.WriteString(titleStyle.Render("Step 2/3 — Select Destination Drive"))
