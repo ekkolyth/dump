@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/ekkolyth/dump/internal/tui"
+	"github.com/ekkolyth/dump/internal/upgrade"
 	"github.com/ekkolyth/dump/internal/version"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -47,6 +48,5 @@ func runTUI(m tea.Model) {
 }
 
 func runUpgrade() error {
-	fmt.Println("Upgrade not yet implemented")
-	return nil
+	return upgrade.Run()
 }
