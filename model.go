@@ -67,9 +67,11 @@ type cardSummary struct {
 }
 
 var (
-	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5")).MarginBottom(1)
-	helpStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C6C6C")).MarginTop(1)
-	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94"))
+	titleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5")).MarginBottom(1)
+	titleInline   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5"))
+	helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C6C6C")).MarginTop(1)
+	helpInline    = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C6C6C"))
+	errStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94"))
 	confirmKey = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AD8CFF"))
 )
 
@@ -634,16 +636,18 @@ func (m model) View() string {
 
 	switch m.step {
 	case stepSourceSelect:
-		b.WriteString(titleStyle.Render("Dump v0.0.1") + "  " + helpStyle.Render("space: toggle | enter: confirm | r: resume session | esc: quit"))
+		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("space: toggle | enter: confirm | esc: quit"))
 		b.WriteString("\n")
 		b.WriteString(helpStyle.Render("Welcome, Mel and/or Cass!"))
 		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("New Dump — Select Source Cards"))
 		b.WriteString("\n")
 		b.WriteString(m.sourceList.View())
+		b.WriteString("\n")
+		b.WriteString("  " + confirmKey.Render("[R]") + " Resume Session")
 
 	case stepResumeSelect:
-		b.WriteString(titleStyle.Render("Dump v0.0.1") + "  " + helpStyle.Render("space: toggle | enter: confirm | esc: back"))
+		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("space: toggle | enter: confirm | esc: back"))
 		b.WriteString("\n")
 		b.WriteString(titleStyle.Render("Resume Session — Select Drives"))
 		b.WriteString("\n")
@@ -652,14 +656,14 @@ func (m model) View() string {
 		b.WriteString(m.destList.View())
 
 	case stepDestSelect:
-		b.WriteString(titleStyle.Render("Dump v0.0.1") + "  " + helpStyle.Render("space: select | enter: confirm | esc: back"))
+		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("space: select | enter: confirm | esc: back"))
 		b.WriteString("\n")
 		b.WriteString(titleStyle.Render("Select Destination Drive"))
 		b.WriteString("\n")
 		b.WriteString(m.destList.View())
 
 	case stepConfirm:
-		b.WriteString(titleStyle.Render("Dump v0.0.1") + "  " + helpStyle.Render("enter: start import | esc: back"))
+		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("enter: start import | esc: back"))
 		b.WriteString("\n")
 		b.WriteString(titleStyle.Render("Confirm Import"))
 		b.WriteString("\n\n")
