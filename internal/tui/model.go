@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"context"
@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mikekenway/sdcard-dump/components"
-	"github.com/mikekenway/sdcard-dump/transfer"
+	"github.com/mikekenway/sdcard-dump/internal/components"
+	driveutil "github.com/mikekenway/sdcard-dump/internal/drives"
+	"github.com/mikekenway/sdcard-dump/internal/transfer"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -31,7 +32,7 @@ type model struct {
 	step wizardStep
 
 	// Drive data
-	allDrives []DiskInfo
+	allDrives []driveutil.DiskInfo
 
 	// Step 1: Source selection
 	sourceList components.DriveListModel
@@ -42,7 +43,7 @@ type model struct {
 	destPath     string
 
 	// Step 3: Confirmation
-	selectedSources []DiskInfo
+	selectedSources []driveutil.DiskInfo
 	cardSummaries   []cardSummary
 
 	// Step 4: Transfer
@@ -75,8 +76,8 @@ var (
 	confirmKey = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AD8CFF"))
 )
 
-func initialModel() model {
-	drives, err := DiscoverDrives()
+func InitialModel() model {
+	drives, err := driveutil.DiscoverDrives()
 	if err != nil {
 		return model{err: fmt.Sprintf("Failed to discover drives: %v", err)}
 	}
@@ -87,8 +88,8 @@ func initialModel() model {
 			VolumeName:     d.VolumeName,
 			MountPoint:     d.MountPoint,
 			DeviceID:       d.DeviceIdentifier,
-			TotalSize:      FormatSize(d.TotalSize),
-			FreeSpace:      FormatSize(d.EffectiveFreeSpace()),
+			TotalSize:      driveutil.FormatSize(d.TotalSize),
+			FreeSpace:      driveutil.FormatSize(d.EffectiveFreeSpace()),
 			FilesystemName: d.FilesystemName,
 			IsExternal:     d.IsExternal(),
 		}
@@ -104,7 +105,7 @@ func initialModel() model {
 	}
 }
 
-func resumeModel(sessionID string) model {
+func ResumeModel(sessionID string) model {
 	// Scan for all volumes belonging to this session
 	matches := transfer.FindAllSessionVolumes(transfer.VolumesRoot, sessionID)
 	if len(matches) == 0 {
@@ -372,8 +373,8 @@ func (m model) updateSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 					VolumeName:     d.VolumeName,
 					MountPoint:     d.MountPoint,
 					DeviceID:       d.DeviceIdentifier,
-					TotalSize:      FormatSize(d.TotalSize),
-					FreeSpace:      FormatSize(d.EffectiveFreeSpace()),
+					TotalSize:      driveutil.FormatSize(d.TotalSize),
+					FreeSpace:      driveutil.FormatSize(d.EffectiveFreeSpace()),
 					FilesystemName: d.FilesystemName,
 					IsExternal:     d.IsExternal(),
 				})
@@ -402,8 +403,8 @@ func (m model) updateSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 				VolumeName:     d.VolumeName,
 				MountPoint:     d.MountPoint,
 				DeviceID:       d.DeviceIdentifier,
-				TotalSize:      FormatSize(d.TotalSize),
-				FreeSpace:      FormatSize(d.EffectiveFreeSpace()),
+				TotalSize:      driveutil.FormatSize(d.TotalSize),
+				FreeSpace:      driveutil.FormatSize(d.EffectiveFreeSpace()),
 				FilesystemName: d.FilesystemName,
 				IsExternal:     d.IsExternal(),
 			})
@@ -673,7 +674,7 @@ func (m model) View() string {
 		b.WriteString("  Sources:\n")
 		for _, s := range m.cardSummaries {
 			b.WriteString(fmt.Sprintf("    • %s — %d files (%s)\n",
-				s.Name, s.FileCount, FormatSize(s.TotalBytes)))
+				s.Name, s.FileCount, driveutil.FormatSize(s.TotalBytes)))
 		}
 		b.WriteString("\n")
 		b.WriteString(fmt.Sprintf("  Destination: %s\n", m.destPath))
@@ -685,7 +686,7 @@ func (m model) View() string {
 			totalFiles += s.FileCount
 			totalBytes += s.TotalBytes
 		}
-		b.WriteString(fmt.Sprintf("  Total: %d files, %s\n", totalFiles, FormatSize(totalBytes)))
+		b.WriteString(fmt.Sprintf("  Total: %d files, %s\n", totalFiles, driveutil.FormatSize(totalBytes)))
 		b.WriteString("\n")
 
 		// Show media extensions for transparency

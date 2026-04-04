@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mikekenway/sdcard-dump/internal/tui"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -12,11 +14,11 @@ func main() {
 	resumeID := flag.String("resume", "", "Resume a previous session by ID")
 	flag.Parse()
 
-	var m model
+	var m tea.Model
 	if *resumeID != "" {
-		m = resumeModel(*resumeID)
+		m = tui.ResumeModel(*resumeID)
 	} else {
-		m = initialModel()
+		m = tui.InitialModel()
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())

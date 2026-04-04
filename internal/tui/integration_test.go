@@ -1,11 +1,11 @@
-package main
+package tui
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/mikekenway/sdcard-dump/transfer"
+	"github.com/mikekenway/sdcard-dump/internal/transfer"
 )
 
 func TestIntegration_DiscoverAndTransfer(t *testing.T) {

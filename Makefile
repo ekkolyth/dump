@@ -5,7 +5,7 @@ dev: build
 
 build:
 	@mkdir -p bin
-	go build -o bin/dump .
+	go build -o bin/dump ./cmd/dump
 
 test:
 	go test ./...
