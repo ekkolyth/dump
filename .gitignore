@@ -1,5 +1,5 @@
-bin/
-stuff.md
-.claude
 .agents
+.claude
+bin/
 dist
+stuff.md
