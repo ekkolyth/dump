@@ -754,36 +754,44 @@ func (m model) View() string {
 		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("enter: start import | esc: back"))
 		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("Step 5 — Confirm Import"))
-		b.WriteString("\n\n")
 
-		b.WriteString("  Sources:\n")
-		for _, s := range m.cardSummaries {
-			b.WriteString(fmt.Sprintf("    • %s — %d files (%s)\n",
-				s.Name, s.FileCount, driveutil.FormatSize(s.TotalBytes)))
+		boxStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#874BFD")).
+			Padding(1, 2)
+		if m.width > 0 {
+			boxStyle = boxStyle.Width(m.width - 6)
 		}
-		b.WriteString("\n")
-		b.WriteString(fmt.Sprintf("  Destination: %s\n", m.destPath))
-		b.WriteString("\n")
 
+		labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#AD8CFF")).Bold(true)
+		valueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#E8A0BF"))
+		cardStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#E8A0BF"))
+		totalStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5"))
+
+		var content strings.Builder
+
+		now := time.Now()
+		eventFolder := fmt.Sprintf("%s - %s - %s", now.Format("06.01.02"), m.clientName, m.eventName)
+		content.WriteString(labelStyle.Render("Event") + "      " + valueStyle.Render(eventFolder) + "\n")
+		content.WriteString(labelStyle.Render("Destination") + "  " + valueStyle.Render(m.destPath) + "\n")
+
+		content.WriteString("\n")
+		content.WriteString(labelStyle.Render("Cards") + "\n")
 		totalFiles := 0
 		var totalBytes int64
 		for _, s := range m.cardSummaries {
 			totalFiles += s.FileCount
 			totalBytes += s.TotalBytes
+			content.WriteString(cardStyle.Render(fmt.Sprintf("  %s", s.Name)))
+			content.WriteString(helpInline.Render(fmt.Sprintf("  %d files  %s", s.FileCount, driveutil.FormatSize(s.TotalBytes))))
+			content.WriteString("\n")
 		}
-		b.WriteString(fmt.Sprintf("  Total: %d files, %s\n", totalFiles, driveutil.FormatSize(totalBytes)))
-		b.WriteString("\n")
 
-		// Show media extensions for transparency
-		b.WriteString("  Media extensions: ")
-		exts := make([]string, 0, len(transfer.MediaExtensions))
-		for ext := range transfer.MediaExtensions {
-			exts = append(exts, ext)
-		}
-		sort.Strings(exts)
-		b.WriteString(helpStyle.Render(strings.Join(exts, ", ")))
+		content.WriteString("\n")
+		content.WriteString(totalStyle.Render(fmt.Sprintf("Total: %d files  %s", totalFiles, driveutil.FormatSize(totalBytes))))
+
+		b.WriteString(boxStyle.Render(content.String()))
 		b.WriteString("\n\n")
-
 		b.WriteString(confirmKey.Render("  Press Enter to start import"))
 
 	case stepTransfer:
