@@ -754,6 +754,7 @@ func (m model) View() string {
 		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("enter: start import | esc: back"))
 		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("Step 5 — Confirm Import"))
+		b.WriteString("\n")
 
 		boxStyle := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
