@@ -12,7 +12,7 @@ import (
 )
 
 const MaxConcurrentDefault = 2
-const MaxRetriesDefault = 5
+const MaxRetriesDefault = 3
 
 type CardSource struct {
 	MountPoint string
@@ -101,6 +101,7 @@ type Engine struct {
 	queue         *JobQueue
 	ctx           context.Context
 	progress      *ProgressTracker
+	mu            sync.RWMutex // protects Cards[].MountPoint and DestBase
 }
 
 func NewEngine(ctx context.Context, cards []CardSource, destBase string, maxConcurrent, maxRetries int) (*Engine, error) {
@@ -306,110 +307,142 @@ func (e *Engine) processJob(j *TransferJob) {
 	card := &e.Cards[j.CardIndex]
 	scanRoot := VolumesRoot
 
-	// Check/wait for source volume
-	newMount, err := e.ensureVolume(scanRoot, "source", j.CardIndex, card.VolumeName)
-	if err != nil {
-		return // context cancelled
-	}
-	if newMount != card.MountPoint {
-		oldMount := card.MountPoint
-		card.MountPoint = newMount
-		j.File.AbsPath = strings.Replace(j.File.AbsPath, oldMount, newMount, 1)
-	}
-
-	// Check/wait for destination volume
-	_, err = e.ensureVolume(scanRoot, "destination", -1, "destination")
-	if err != nil {
-		return // context cancelled
-	}
-
-	destDir := filepath.Dir(j.Dest)
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		e.Events <- TransferEvent{
-			Type:      EventFileFailed,
-			CardIndex: j.CardIndex,
-			File:      j.File,
-			Err:       fmt.Errorf("create dest dir: %w", err),
-		}
-		return
-	}
-
-	e.Events <- TransferEvent{
-		Type:      EventFileStart,
-		CardIndex: j.CardIndex,
-		File:      j.File,
-	}
-
-	for attempt := 0; attempt <= e.MaxRetries; attempt++ {
-		if attempt > 0 {
-			// Check if this is a disconnection — if so, wait for reconnect
-			if VolumeMissing(card.MountPoint) || VolumeMissing(e.DestBase) {
-				newMount, err := e.ensureVolume(scanRoot, "source", j.CardIndex, card.VolumeName)
-				if err != nil {
-					return
-				}
-				if newMount != card.MountPoint {
-					oldMount := card.MountPoint
-					card.MountPoint = newMount
-					j.File.AbsPath = strings.Replace(j.File.AbsPath, oldMount, newMount, 1)
-				}
-				newDest, err := e.ensureVolume(scanRoot, "destination", -1, "destination")
-				if err != nil {
-					return
-				}
-				if newDest != e.DestBase {
-					oldDest := e.DestBase
-					e.DestBase = newDest
-					j.Dest = strings.Replace(j.Dest, oldDest, newDest, 1)
-					destDir = filepath.Dir(j.Dest)
-					os.MkdirAll(destDir, 0755)
-				}
-				// Reset attempt counter — disconnection isn't a "real" failure
-				attempt = 0
-			}
-
-			backoff := time.Duration(math.Pow(2, float64(attempt-1))) * time.Second
-			select {
-			case <-e.ctx.Done():
-				return
-			case <-time.After(backoff):
-			}
-
-			e.Events <- TransferEvent{
-				Type:      EventFileRetry,
-				CardIndex: j.CardIndex,
-				File:      j.File,
-				Retry:     attempt,
-				MaxRetry:  e.MaxRetries,
-			}
+	// Outer loop: wait for volumes, then attempt transfer
+	for {
+		// Ensure source volume is present (waits indefinitely)
+		if err := e.ensureAndUpdateSource(scanRoot, j, card); err != nil {
+			return // context cancelled
 		}
 
-		err := RsyncFile(j.File.AbsPath, j.Dest, func(p Progress) {
-			e.Events <- TransferEvent{
-				Type:      EventFileProgress,
-				CardIndex: j.CardIndex,
-				File:      j.File,
-				Progress:  p,
-			}
-		})
-
-		if err == nil {
-			e.Events <- TransferEvent{
-				Type:      EventFileComplete,
-				CardIndex: j.CardIndex,
-				File:      j.File,
-			}
-			e.progress.MarkComplete(j.CardIndex, j.File.RelPath)
-			return
+		// Ensure destination volume is present (waits indefinitely)
+		if err := e.ensureAndUpdateDest(scanRoot, j); err != nil {
+			return // context cancelled
 		}
 
-		if attempt == e.MaxRetries {
+		destDir := filepath.Dir(j.Dest)
+		if err := os.MkdirAll(destDir, 0755); err != nil {
 			e.Events <- TransferEvent{
 				Type:      EventFileFailed,
 				CardIndex: j.CardIndex,
 				File:      j.File,
-				Err:       err,
+				Err:       fmt.Errorf("create dest dir: %w", err),
+			}
+			return
+		}
+
+		e.Events <- TransferEvent{
+			Type:      EventFileStart,
+			CardIndex: j.CardIndex,
+			File:      j.File,
+		}
+
+		// Inner loop: retry rsync up to MaxRetries for non-disconnection errors
+		disconnected := false
+		for attempt := 0; attempt <= e.MaxRetries; attempt++ {
+			if attempt > 0 {
+				// Check if this failure was a disconnection
+				e.mu.RLock()
+				srcMissing := VolumeMissing(card.MountPoint)
+				destMissing := VolumeMissing(e.DestBase)
+				e.mu.RUnlock()
+
+				if srcMissing || destMissing {
+					disconnected = true
+					break // back to outer loop for reconnection wait
+				}
+
+				backoff := time.Duration(math.Pow(2, float64(attempt-1))) * time.Second
+				select {
+				case <-e.ctx.Done():
+					return
+				case <-time.After(backoff):
+				}
+
+				e.Events <- TransferEvent{
+					Type:      EventFileRetry,
+					CardIndex: j.CardIndex,
+					File:      j.File,
+					Retry:     attempt,
+					MaxRetry:  e.MaxRetries,
+				}
+			}
+
+			err := RsyncFile(j.File.AbsPath, j.Dest, func(p Progress) {
+				e.Events <- TransferEvent{
+					Type:      EventFileProgress,
+					CardIndex: j.CardIndex,
+					File:      j.File,
+					Progress:  p,
+				}
+			})
+
+			if err == nil {
+				e.Events <- TransferEvent{
+					Type:      EventFileComplete,
+					CardIndex: j.CardIndex,
+					File:      j.File,
+				}
+				e.progress.MarkComplete(j.CardIndex, j.File.RelPath)
+				return
+			}
+
+			if attempt == e.MaxRetries {
+				e.Events <- TransferEvent{
+					Type:      EventFileFailed,
+					CardIndex: j.CardIndex,
+					File:      j.File,
+					Err:       err,
+				}
+				return
 			}
 		}
+
+		if !disconnected {
+			return
+		}
+		// disconnected = true: loop back to outer wait
 	}
+}
+
+// ensureAndUpdateSource waits for the source volume and updates mount paths under lock.
+func (e *Engine) ensureAndUpdateSource(scanRoot string, j *TransferJob, card *CardSource) error {
+	e.mu.RLock()
+	currentMount := card.MountPoint
+	e.mu.RUnlock()
+
+	newMount, err := e.ensureVolume(scanRoot, "source", j.CardIndex, card.VolumeName)
+	if err != nil {
+		return err
+	}
+	if newMount != currentMount {
+		e.mu.Lock()
+		card.MountPoint = newMount
+		e.mu.Unlock()
+		// Update job's absolute path using prefix replacement
+		if strings.HasPrefix(j.File.AbsPath, currentMount) {
+			j.File.AbsPath = newMount + j.File.AbsPath[len(currentMount):]
+		}
+	}
+	return nil
+}
+
+// ensureAndUpdateDest waits for the destination volume and updates paths under lock.
+func (e *Engine) ensureAndUpdateDest(scanRoot string, j *TransferJob) error {
+	e.mu.RLock()
+	currentDest := e.DestBase
+	e.mu.RUnlock()
+
+	newDest, err := e.ensureVolume(scanRoot, "destination", -1, "destination")
+	if err != nil {
+		return err
+	}
+	if newDest != currentDest {
+		e.mu.Lock()
+		e.DestBase = newDest
+		e.mu.Unlock()
+		if strings.HasPrefix(j.Dest, currentDest) {
+			j.Dest = newDest + j.Dest[len(currentDest):]
+		}
+	}
+	return nil
 }

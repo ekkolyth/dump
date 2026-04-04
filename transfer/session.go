@@ -63,19 +63,21 @@ func RemoveDumpMetadata(mountPoint string) error {
 
 // ProgressTracker tracks completed files and persists to dump-progress.json.
 type ProgressTracker struct {
-	mu        sync.Mutex
-	destPath  string
-	sessionID string
-	completed map[int][]string
+	mu           sync.Mutex
+	destPath     string
+	sessionID    string
+	completed    map[int][]string          // for serialization
+	completedSet map[int]map[string]bool   // for O(1) lookup
 }
 
 // NewProgressTracker creates a tracker. If dump-progress.json exists on the
 // destination, it loads the existing state.
 func NewProgressTracker(destPath, sessionID string) *ProgressTracker {
 	pt := &ProgressTracker{
-		destPath:  destPath,
-		sessionID: sessionID,
-		completed: make(map[int][]string),
+		destPath:     destPath,
+		sessionID:    sessionID,
+		completed:    make(map[int][]string),
+		completedSet: make(map[int]map[string]bool),
 	}
 	// Try to load existing progress
 	data, err := os.ReadFile(filepath.Join(destPath, progressFile))
@@ -83,6 +85,12 @@ func NewProgressTracker(destPath, sessionID string) *ProgressTracker {
 		var meta ProgressMetadata
 		if json.Unmarshal(data, &meta) == nil && meta.SessionID == sessionID {
 			pt.completed = meta.Completed
+			for cardIdx, paths := range meta.Completed {
+				pt.completedSet[cardIdx] = make(map[string]bool, len(paths))
+				for _, p := range paths {
+					pt.completedSet[cardIdx][p] = true
+				}
+			}
 		}
 	}
 	return pt
@@ -93,6 +101,10 @@ func (pt *ProgressTracker) MarkComplete(cardIndex int, relPath string) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 	pt.completed[cardIndex] = append(pt.completed[cardIndex], relPath)
+	if pt.completedSet[cardIndex] == nil {
+		pt.completedSet[cardIndex] = make(map[string]bool)
+	}
+	pt.completedSet[cardIndex][relPath] = true
 	pt.persist()
 }
 
@@ -100,12 +112,7 @@ func (pt *ProgressTracker) MarkComplete(cardIndex int, relPath string) {
 func (pt *ProgressTracker) IsComplete(cardIndex int, relPath string) bool {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
-	for _, p := range pt.completed[cardIndex] {
-		if p == relPath {
-			return true
-		}
-	}
-	return false
+	return pt.completedSet[cardIndex][relPath]
 }
 
 // CompletedSet returns the full map of completed files.

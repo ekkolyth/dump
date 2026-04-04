@@ -555,7 +555,15 @@ func (m model) updateTransfer(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *model) applyTransferEvent(evt transfer.TransferEvent) {
 	idx := evt.CardIndex
+
+	// Destination events use CardIndex -1 — handle them as log-only entries
 	if idx < 0 || idx >= len(m.dashboard.Cards) {
+		switch evt.Type {
+		case transfer.EventCardWaiting:
+			m.dashboard.AddLogEntry(components.LogWarning, "destination: waiting for reconnection...")
+		case transfer.EventCardResumed:
+			m.dashboard.AddLogEntry(components.LogReconnected, "destination: reconnected, resuming transfer")
+		}
 		return
 	}
 
