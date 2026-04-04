@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"os"
@@ -92,17 +93,21 @@ type Engine struct {
 	DestBase      string
 	MaxConcurrent int
 	MaxRetries    int
+	SessionID     string
 	Events        chan TransferEvent
 	queue         *JobQueue
+	ctx           context.Context
+	progress      *ProgressTracker
 }
 
-func NewEngine(cards []CardSource, destBase string, maxConcurrent, maxRetries int) (*Engine, error) {
+func NewEngine(ctx context.Context, cards []CardSource, destBase string, maxConcurrent, maxRetries int) (*Engine, error) {
 	e := &Engine{
 		DestBase:      destBase,
 		MaxConcurrent: maxConcurrent,
 		MaxRetries:    maxRetries,
 		Events:        make(chan TransferEvent, 100),
 		queue:         NewJobQueue(),
+		ctx:           ctx,
 	}
 
 	for i := range cards {
@@ -131,6 +136,38 @@ func NewEngine(cards []CardSource, destBase string, maxConcurrent, maxRetries in
 	}
 
 	e.Cards = cards
+
+	sessionID := GenerateSessionID()
+	e.SessionID = sessionID
+	startedAt := time.Now().UTC().Format(time.RFC3339)
+
+	for i, card := range cards {
+		if err := WriteDumpMetadata(card.MountPoint, DumpMetadata{
+			SessionID: sessionID,
+			Role:      "source",
+			CardIndex: i,
+			CardName:  card.VolumeName,
+			StartedAt: startedAt,
+		}); err != nil {
+			return nil, fmt.Errorf("write source metadata for %s: %w", card.VolumeName, err)
+		}
+	}
+
+	sourceCardIDs := make([]int, len(cards))
+	for i := range cards {
+		sourceCardIDs[i] = i
+	}
+	if err := WriteDumpMetadata(destBase, DumpMetadata{
+		SessionID:     sessionID,
+		Role:          "destination",
+		SourceCardIDs: sourceCardIDs,
+		StartedAt:     startedAt,
+	}); err != nil {
+		return nil, fmt.Errorf("write destination metadata: %w", err)
+	}
+
+	e.progress = NewProgressTracker(destBase, sessionID)
+
 	return e, nil
 }
 

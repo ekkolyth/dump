@@ -1,7 +1,9 @@
 package transfer
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -49,7 +51,7 @@ func TestEngineCreation(t *testing.T) {
 	// Create a media file
 	os.WriteFile(tmpDir+"/test.mp4", []byte("video"), 0644)
 
-	e, err := NewEngine(cards, t.TempDir(), 2, 3)
+	e, err := NewEngine(context.Background(), cards, t.TempDir(), 2, 3)
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
 	}
@@ -65,5 +67,43 @@ func TestEngineCreation(t *testing.T) {
 	}
 	if e.Cards[0].TotalFiles != 1 {
 		t.Errorf("TotalFiles = %d, want 1", e.Cards[0].TotalFiles)
+	}
+}
+
+func TestEngine_WritesMetadata(t *testing.T) {
+	srcDir := t.TempDir()
+	destDir := t.TempDir()
+	os.WriteFile(filepath.Join(srcDir, "test.mp4"), []byte("video"), 0644)
+
+	cards := []CardSource{
+		{MountPoint: srcDir, VolumeName: "TestCard", CardIndex: 0},
+	}
+
+	e, err := NewEngine(context.Background(), cards, destDir, 2, 3)
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+
+	if e.SessionID == "" {
+		t.Error("SessionID should not be empty")
+	}
+
+	srcMeta, err := ReadDumpMetadata(srcDir)
+	if err != nil {
+		t.Fatalf("read source metadata: %v", err)
+	}
+	if srcMeta.Role != "source" {
+		t.Errorf("source role = %q, want %q", srcMeta.Role, "source")
+	}
+	if srcMeta.SessionID != e.SessionID {
+		t.Errorf("source session = %q, want %q", srcMeta.SessionID, e.SessionID)
+	}
+
+	destMeta, err := ReadDumpMetadata(destDir)
+	if err != nil {
+		t.Fatalf("read dest metadata: %v", err)
+	}
+	if destMeta.Role != "destination" {
+		t.Errorf("dest role = %q, want %q", destMeta.Role, "destination")
 	}
 }

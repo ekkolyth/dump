@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -17,7 +18,6 @@ type wizardStep int
 const (
 	stepSourceSelect wizardStep = iota
 	stepDestSelect
-	stepDestBrowse
 	stepConfirm
 	stepTransfer
 )
@@ -34,11 +34,10 @@ type model struct {
 	// Step 1: Source selection
 	sourceList components.DriveListModel
 
-	// Step 2: Destination drive selection + file browser
-	destList       components.DriveListModel
-	destIndexMap   []int // maps dest list indices back to allDrives indices
-	fileBrowser    components.FileBrowserModel
-	destPath       string
+	// Step 2: Destination drive selection
+	destList     components.DriveListModel
+	destIndexMap []int // maps dest list indices back to allDrives indices
+	destPath     string
 
 	// Step 3: Confirmation
 	selectedSources []DiskInfo
@@ -122,8 +121,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateSourceSelect(msg)
 	case stepDestSelect:
 		return m.updateDestSelect(msg)
-	case stepDestBrowse:
-		return m.updateDestBrowse(msg)
 	case stepConfirm:
 		return m.updateConfirm(msg)
 	case stepTransfer:
@@ -139,10 +136,8 @@ func (m model) handleBack() (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case stepDestSelect:
 		m.step = stepSourceSelect
-	case stepDestBrowse:
-		m.step = stepDestSelect
 	case stepConfirm:
-		m.step = stepDestBrowse
+		m.step = stepDestSelect
 	}
 	return m, nil
 }
@@ -199,8 +194,21 @@ func (m model) updateDestSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 			destIdx := msg.Selected[0]
 			driveIdx := m.destIndexMap[destIdx]
 			mountPoint := m.allDrives[driveIdx].MountPoint
-			m.fileBrowser = components.NewFileBrowser(mountPoint)
-			m.step = stepDestBrowse
+			m.destPath = mountPoint
+			m.cardSummaries = nil
+			for i, src := range m.selectedSources {
+				files, _ := transfer.DiscoverMediaFiles(src.MountPoint)
+				var totalBytes int64
+				for _, f := range files {
+					totalBytes += f.Size
+				}
+				m.cardSummaries = append(m.cardSummaries, cardSummary{
+					Name:       fmt.Sprintf("card-%d-%s", i+1, src.VolumeName),
+					FileCount:  len(files),
+					TotalBytes: totalBytes,
+				})
+			}
+			m.step = stepConfirm
 		}
 		return m, nil
 	default:
@@ -210,33 +218,6 @@ func (m model) updateDestSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m model) updateDestBrowse(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case components.FolderSelectedMsg:
-		m.destPath = msg.Path
-		m.cardSummaries = nil
-		for i, src := range m.selectedSources {
-			files, _ := transfer.DiscoverMediaFiles(src.MountPoint)
-			var totalBytes int64
-			for _, f := range files {
-				totalBytes += f.Size
-			}
-			m.cardSummaries = append(m.cardSummaries, cardSummary{
-				Name:       fmt.Sprintf("card-%d-%s", i+1, src.VolumeName),
-				FileCount:  len(files),
-				TotalBytes: totalBytes,
-			})
-		}
-		m.step = stepConfirm
-		return m, nil
-	default:
-		m.fileBrowser, cmd = m.fileBrowser.Update(msg)
-	}
-
-	return m, cmd
-}
 
 func (m model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -258,7 +239,7 @@ func (m model) startTransfer() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	engine, err := transfer.NewEngine(cards, m.destPath, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
+	engine, err := transfer.NewEngine(context.Background(), cards, m.destPath, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
 	if err != nil {
 		m.err = err.Error()
 		return m, nil
@@ -396,24 +377,19 @@ func (m model) View() string {
 		b.WriteString("\n")
 		b.WriteString(helpStyle.Render("When you just need to take a dump"))
 		b.WriteString("\n\n")
-		b.WriteString(titleStyle.Render("Step 1/4 — Select Source Cards"))
+		b.WriteString(titleStyle.Render("Step 1/3 — Select Source Cards"))
 		b.WriteString("\n")
 		b.WriteString(m.sourceList.View())
 		b.WriteString(helpStyle.Render("space: toggle • enter: confirm • esc: quit"))
 
 	case stepDestSelect:
-		b.WriteString(titleStyle.Render("Step 2/4 — Select Destination Drive"))
+		b.WriteString(titleStyle.Render("Step 2/3 — Select Destination Drive"))
 		b.WriteString("\n")
 		b.WriteString(m.destList.View())
 		b.WriteString(helpStyle.Render("space: select • enter: confirm • esc: back"))
 
-	case stepDestBrowse:
-		b.WriteString(titleStyle.Render("Step 2/4 — Choose Destination Folder"))
-		b.WriteString("\n")
-		b.WriteString(m.fileBrowser.View())
-
 	case stepConfirm:
-		b.WriteString(titleStyle.Render("Step 3/4 — Confirm Import"))
+		b.WriteString(titleStyle.Render("Step 3/3 — Confirm Import"))
 		b.WriteString("\n\n")
 
 		b.WriteString("  Sources:\n")
