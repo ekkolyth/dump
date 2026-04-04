@@ -174,6 +174,52 @@ func NewEngine(ctx context.Context, cards []CardSource, destBase string, maxConc
 	return e, nil
 }
 
+// NewEngineResume creates an engine that resumes an existing session.
+// It uses the existing session ID and skips writing new dump.json files.
+// Already-completed files (from dump-progress.json) are skipped during Run().
+func NewEngineResume(ctx context.Context, sessionID string, cards []CardSource, destBase string, maxConcurrent, maxRetries int) (*Engine, error) {
+	e := &Engine{
+		DestBase:      destBase,
+		MaxConcurrent: maxConcurrent,
+		MaxRetries:    maxRetries,
+		SessionID:     sessionID,
+		Events:        make(chan TransferEvent, 100),
+		queue:         NewJobQueue(),
+		ctx:           ctx,
+	}
+
+	// Load existing progress
+	e.progress = NewProgressTracker(destBase, sessionID)
+
+	for i := range cards {
+		files, err := DiscoverMediaFiles(cards[i].MountPoint)
+		if err != nil {
+			return nil, fmt.Errorf("discover files on %s: %w", cards[i].VolumeName, err)
+		}
+
+		cards[i].Files = files
+		cards[i].TotalFiles = len(files)
+		var totalBytes int64
+		for _, f := range files {
+			totalBytes += f.Size
+		}
+		cards[i].TotalBytes = totalBytes
+
+		cardDir := fmt.Sprintf("card-%d-%s", cards[i].CardIndex+1, cards[i].VolumeName)
+		for _, f := range files {
+			dest := filepath.Join(destBase, cardDir, f.RelPath)
+			e.queue.Push(&TransferJob{
+				File:      f,
+				CardIndex: cards[i].CardIndex,
+				Dest:      dest,
+			})
+		}
+	}
+
+	e.Cards = cards
+	return e, nil
+}
+
 // waitForVolume polls for a volume matching the session's dump.json.
 // Returns the mount point when found, or error if context is cancelled.
 func (e *Engine) waitForVolume(scanRoot, role string, cardIndex int) (string, error) {

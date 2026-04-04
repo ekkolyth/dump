@@ -98,7 +98,79 @@ func initialModel() model {
 	}
 }
 
+func resumeModel(sessionID string) model {
+	// Scan for all volumes belonging to this session
+	matches := transfer.FindAllSessionVolumes(transfer.VolumesRoot, sessionID)
+	if len(matches) == 0 {
+		return model{err: fmt.Sprintf("No drives found for session %s. Plug in the drives and try again.", sessionID)}
+	}
+
+	// Separate source and destination
+	var sources []transfer.VolumeMatch
+	var dest *transfer.VolumeMatch
+	for i, m := range matches {
+		if m.Meta.Role == "destination" {
+			dest = &matches[i]
+		} else if m.Meta.Role == "source" {
+			sources = append(sources, m)
+		}
+	}
+
+	if dest == nil {
+		return model{err: "Destination drive not found. Plug it in and try again."}
+	}
+	if len(sources) == 0 {
+		return model{err: "No source drives found. Plug them in and try again."}
+	}
+
+	// Build card sources
+	cards := make([]transfer.CardSource, len(sources))
+	for i, src := range sources {
+		cards[i] = transfer.CardSource{
+			MountPoint: src.MountPoint,
+			VolumeName: src.Meta.CardName,
+			CardIndex:  src.Meta.CardIndex,
+		}
+	}
+
+	// Create engine with existing session
+	ctx, cancel := context.WithCancel(context.Background())
+	engine, err := transfer.NewEngineResume(ctx, sessionID, cards, dest.MountPoint, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
+	if err != nil {
+		cancel()
+		return model{err: fmt.Sprintf("Resume failed: %v", err)}
+	}
+
+	dashCards := make([]components.CardProgress, len(engine.Cards))
+	for i, c := range engine.Cards {
+		dashCards[i] = components.CardProgress{
+			CardName:   fmt.Sprintf("card-%d", c.CardIndex+1),
+			VolumeName: c.VolumeName,
+			TotalFiles: c.TotalFiles,
+			TotalBytes: c.TotalBytes,
+		}
+	}
+
+	return model{
+		step:         stepTransfer,
+		engine:       engine,
+		cancelEngine: cancel,
+		sessionID:    sessionID,
+		dashboard:    components.NewDashboard(dashCards),
+	}
+}
+
 func (m model) Init() tea.Cmd {
+	if m.step == stepTransfer && m.engine != nil {
+		return func() tea.Msg {
+			go m.engine.Run()
+			evt, ok := <-m.engine.Events
+			if !ok {
+				return transferEventMsg{Type: transfer.EventAllComplete}
+			}
+			return transferEventMsg(evt)
+		}
+	}
 	return nil
 }
 
