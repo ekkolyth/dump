@@ -3,6 +3,8 @@ package transfer
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -137,6 +139,71 @@ func TestProgressTracker_IgnoresWrongSession(t *testing.T) {
 	pt2 := NewProgressTracker(dir, "sess2")
 	if pt2.IsComplete(0, "a.mp4") {
 		t.Error("tracker with different session should not load old progress")
+	}
+}
+
+func TestResumeRoundTrip(t *testing.T) {
+	srcDir := t.TempDir()
+	destDir := t.TempDir()
+
+	// Simulate: engine wrote metadata, transferred some files, then stopped
+	sessionID := "testresume"
+	WriteDumpMetadata(srcDir, DumpMetadata{
+		SessionID: sessionID,
+		Role:      "source",
+		CardIndex: 0,
+		CardName:  "card-1-TEST",
+		StartedAt: "2026-04-04T00:00:00Z",
+	})
+	WriteDumpMetadata(destDir, DumpMetadata{
+		SessionID:     sessionID,
+		Role:          "destination",
+		SourceCardIDs: []int{0},
+		StartedAt:     "2026-04-04T00:00:00Z",
+	})
+
+	// Mark one file as already completed
+	pt := NewProgressTracker(destDir, sessionID)
+	pt.MarkComplete(0, "already-done.mp4")
+
+	// Verify the tracker loads correctly on a fresh instance
+	pt2 := NewProgressTracker(destDir, sessionID)
+	if !pt2.IsComplete(0, "already-done.mp4") {
+		t.Error("expected already-done.mp4 to be complete after reload")
+	}
+	if pt2.IsComplete(0, "not-done.mp4") {
+		t.Error("expected not-done.mp4 to NOT be complete")
+	}
+
+	// Verify volume scanning finds the drives
+	scanRoot := t.TempDir()
+	vol1 := filepath.Join(scanRoot, "SRC")
+	vol2 := filepath.Join(scanRoot, "DST")
+	os.MkdirAll(vol1, 0755)
+	os.MkdirAll(vol2, 0755)
+
+	WriteDumpMetadata(vol1, DumpMetadata{SessionID: sessionID, Role: "source", CardIndex: 0})
+	WriteDumpMetadata(vol2, DumpMetadata{SessionID: sessionID, Role: "destination"})
+
+	matches := FindAllSessionVolumes(scanRoot, sessionID)
+	if len(matches) != 2 {
+		t.Fatalf("expected 2 matches, got %d", len(matches))
+	}
+
+	srcMount, found := FindVolumeBySession(scanRoot, sessionID, "source", 0)
+	if !found {
+		t.Fatal("expected to find source volume")
+	}
+	if srcMount != vol1 {
+		t.Errorf("source mount = %q, want %q", srcMount, vol1)
+	}
+
+	destMount, found := FindVolumeBySession(scanRoot, sessionID, "destination", -1)
+	if !found {
+		t.Fatal("expected to find destination volume")
+	}
+	if destMount != vol2 {
+		t.Errorf("dest mount = %q, want %q", destMount, vol2)
 	}
 }
 
