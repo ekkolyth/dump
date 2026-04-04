@@ -24,9 +24,15 @@ type DriveSelectedMsg struct {
 	Selected []int // Indices of selected drives
 }
 
+// ExtraItemSelectedMsg is sent when an extra item (below the drive list) is selected.
+type ExtraItemSelectedMsg struct {
+	Label string
+}
+
 // DriveListModel is a multi-select or single-select list of drives.
 type DriveListModel struct {
 	Drives      []DriveInfo
+	ExtraItems  []string // Labels for extra selectable items below the drive list
 	cursor      int
 	selected    map[int]bool
 	MultiSelect bool
@@ -53,26 +59,33 @@ func (m DriveListModel) Update(msg tea.Msg) (DriveListModel, tea.Cmd) {
 		m.height = msg.Height
 
 	case tea.KeyMsg:
+		maxCursor := len(m.Drives) - 1 + len(m.ExtraItems)
 		switch msg.String() {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
 			}
 		case "down", "j":
-			if m.cursor < len(m.Drives)-1 {
+			if m.cursor < maxCursor {
 				m.cursor++
 			}
 		case " ":
-			if m.MultiSelect {
-				m.selected[m.cursor] = !m.selected[m.cursor]
-				if !m.selected[m.cursor] {
-					delete(m.selected, m.cursor)
+			if m.cursor < len(m.Drives) {
+				if m.MultiSelect {
+					m.selected[m.cursor] = !m.selected[m.cursor]
+					if !m.selected[m.cursor] {
+						delete(m.selected, m.cursor)
+					}
+				} else {
+					m.selected = map[int]bool{m.cursor: true}
 				}
-			} else {
-				// Single select: clear previous, select current
-				m.selected = map[int]bool{m.cursor: true}
 			}
 		case "enter":
+			if m.cursor >= len(m.Drives) {
+				extraIdx := m.cursor - len(m.Drives)
+				label := m.ExtraItems[extraIdx]
+				return m, func() tea.Msg { return ExtraItemSelectedMsg{Label: label} }
+			}
 			if len(m.selected) > 0 {
 				indices := make([]int, 0, len(m.selected))
 				for i := range m.selected {
@@ -128,6 +141,21 @@ func (m DriveListModel) View() string {
 			line = driveSelected.Render(line)
 		}
 
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+
+	for i, label := range m.ExtraItems {
+		idx := len(m.Drives) + i
+		b.WriteString("\n")
+		cursor := "  "
+		if idx == m.cursor {
+			cursor = "> "
+		}
+		line := fmt.Sprintf("%s%s", cursor, label)
+		if idx == m.cursor {
+			line = driveCursor.Render(line)
+		}
 		b.WriteString(line)
 		b.WriteString("\n")
 	}

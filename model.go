@@ -70,7 +70,7 @@ var (
 	titleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5")).MarginBottom(1)
 	titleInline   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5"))
 	helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MarginTop(1)
-	helpInline    = lipgloss.NewStyle().Foreground(lipgloss.Color("243"))
+	helpInline    = lipgloss.NewStyle().Foreground(lipgloss.Color("243")).Faint(true)
 	errStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94"))
 	confirmKey = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AD8CFF"))
 )
@@ -94,10 +94,13 @@ func initialModel() model {
 		}
 	}
 
+	srcList := components.NewDriveList(driveInfos, true)
+	srcList.ExtraItems = []string{"Resume Session"}
+
 	return model{
 		step:       stepSourceSelect,
 		allDrives:  drives,
-		sourceList: components.NewDriveList(driveInfos, true),
+		sourceList: srcList,
 	}
 }
 
@@ -359,26 +362,25 @@ func (m model) handleBack() (tea.Model, tea.Cmd) {
 func (m model) updateSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
-	// Check for resume shortcut before delegating to drive list
-	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "r" {
-		m.step = stepResumeSelect
-		var resumeDrives []components.DriveInfo
-		for _, d := range m.allDrives {
-			resumeDrives = append(resumeDrives, components.DriveInfo{
-				VolumeName:     d.VolumeName,
-				MountPoint:     d.MountPoint,
-				DeviceID:       d.DeviceIdentifier,
-				TotalSize:      FormatSize(d.TotalSize),
-				FreeSpace:      FormatSize(d.EffectiveFreeSpace()),
-				FilesystemName: d.FilesystemName,
-				IsExternal:     d.IsExternal(),
-			})
-		}
-		m.destList = components.NewDriveList(resumeDrives, true)
-		return m, nil
-	}
-
 	switch msg := msg.(type) {
+	case components.ExtraItemSelectedMsg:
+		if msg.Label == "Resume Session" {
+			m.step = stepResumeSelect
+			var resumeDrives []components.DriveInfo
+			for _, d := range m.allDrives {
+				resumeDrives = append(resumeDrives, components.DriveInfo{
+					VolumeName:     d.VolumeName,
+					MountPoint:     d.MountPoint,
+					DeviceID:       d.DeviceIdentifier,
+					TotalSize:      FormatSize(d.TotalSize),
+					FreeSpace:      FormatSize(d.EffectiveFreeSpace()),
+					FilesystemName: d.FilesystemName,
+					IsExternal:     d.IsExternal(),
+				})
+			}
+			m.destList = components.NewDriveList(resumeDrives, true)
+			return m, nil
+		}
 	case components.DriveSelectedMsg:
 		m.selectedSources = nil
 		indices := msg.Selected
@@ -637,15 +639,13 @@ func (m model) View() string {
 
 	switch m.step {
 	case stepSourceSelect:
-		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("space: toggle | enter: confirm | esc: quit"))
+		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("space: toggle | enter: select | esc: quit"))
 		b.WriteString("\n")
-		b.WriteString(helpStyle.Render("Welcome, Mel and/or Cass!"))
+		b.WriteString(helpInline.Render("Welcome, Mel and/or Cass!"))
 		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("New Dump — Select Source Cards"))
 		b.WriteString("\n")
 		b.WriteString(m.sourceList.View())
-		b.WriteString("\n")
-		b.WriteString("  " + confirmKey.Render("[R]") + " Resume Session")
 
 	case stepResumeSelect:
 		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("space: toggle | enter: confirm | esc: back"))
