@@ -158,6 +158,7 @@ func ResumeModel(sessionID string) model {
 		return model{err: fmt.Sprintf("Resume failed: %v", err)}
 	}
 
+	completed := engine.CompletedStats()
 	dashCards := make([]components.CardProgress, len(engine.Cards))
 	for i, c := range engine.Cards {
 		dashCards[i] = components.CardProgress{
@@ -165,6 +166,10 @@ func ResumeModel(sessionID string) model {
 			VolumeName: c.VolumeName,
 			TotalFiles: c.TotalFiles,
 			TotalBytes: c.TotalBytes,
+		}
+		if s, ok := completed[i]; ok {
+			dashCards[i].CompletedFiles = s.Files
+			dashCards[i].BytesDone = s.Bytes
 		}
 	}
 
@@ -595,6 +600,7 @@ func (m model) startTransfer() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	completedNew := engine.CompletedStats()
 	dashCards := make([]components.CardProgress, len(engine.Cards))
 	for i, c := range engine.Cards {
 		dashCards[i] = components.CardProgress{
@@ -602,6 +608,10 @@ func (m model) startTransfer() (tea.Model, tea.Cmd) {
 			VolumeName: c.VolumeName,
 			TotalFiles: c.TotalFiles,
 			TotalBytes: c.TotalBytes,
+		}
+		if s, ok := completedNew[i]; ok {
+			dashCards[i].CompletedFiles = s.Files
+			dashCards[i].BytesDone = s.Bytes
 		}
 	}
 
