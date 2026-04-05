@@ -217,9 +217,11 @@ func (m DashboardModel) View() string {
 	if m.width > 0 {
 		// Width sets content width; subtract border (2) + horizontal padding to match terminal width
 		// dashBorder has Padding(1,2) = 4 horizontal padding + 2 border = 6
-		dashStyle = dashStyle.Width(m.width - 6)
+		contentWidth := m.width - 6
+		dashStyle = dashStyle.Width(contentWidth).MaxWidth(m.width)
 		// logBorder has Padding(0,1) = 2 horizontal padding + 2 border = 4
-		logStyle = logStyle.Width(m.width - 4)
+		logContentWidth := m.width - 4
+		logStyle = logStyle.Width(logContentWidth).MaxWidth(m.width)
 	}
 
 	b.WriteString(dashStyle.Render(title + "\n\n" + cardsView.String()))
