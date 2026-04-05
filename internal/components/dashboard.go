@@ -157,8 +157,9 @@ func (m DashboardModel) View() string {
 		for _, af := range c.ActiveFiles {
 			activeBytes += af.BytesTransferred
 		}
-		bar := renderProgressBar(c.CompletedFiles, c.TotalFiles, 30)
-		stats := fmt.Sprintf("  %d/%d  %s", c.CompletedFiles, c.TotalFiles, formatBytes(c.BytesDone+activeBytes))
+		effectiveCardBytes := c.BytesDone + activeBytes
+		bar := renderProgressBarBytes(effectiveCardBytes, c.TotalBytes, 30)
+		stats := fmt.Sprintf("  %d/%d  %s", c.CompletedFiles, c.TotalFiles, formatBytes(effectiveCardBytes))
 
 		cardsView.WriteString(label)
 		cardsView.WriteString("      ")
@@ -273,11 +274,11 @@ func (m DashboardModel) View() string {
 	return b.String()
 }
 
-func renderProgressBar(done, total, width int) string {
+func renderProgressBarBytes(done, total int64, width int) string {
 	if total == 0 {
 		return strings.Repeat("░", width)
 	}
-	filled := (done * width) / total
+	filled := int(done * int64(width) / total)
 	if filled > width {
 		filled = width
 	}
