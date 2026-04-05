@@ -672,15 +672,19 @@ func (m *model) applyTransferEvent(evt transfer.TransferEvent) {
 
 	switch evt.Type {
 	case transfer.EventFileStart:
-		card.CurrentFile = evt.File.RelPath
-		card.CurrentFileSize = evt.File.Size
-		card.CurrentFileBytes = 0
+		if card.ActiveFiles == nil {
+			card.ActiveFiles = make(map[string]*components.ActiveFile)
+		}
+		card.ActiveFiles[evt.File.RelPath] = &components.ActiveFile{
+			RelPath: evt.File.RelPath,
+		}
 
 	case transfer.EventFileProgress:
-		card.CurrentFile = evt.File.RelPath
-		card.CurrentSpeed = evt.Progress.Speed
-		card.CurrentPct = evt.Progress.Percentage
-		card.CurrentFileBytes = evt.Progress.BytesTransferred
+		if af, ok := card.ActiveFiles[evt.File.RelPath]; ok {
+			af.Speed = evt.Progress.Speed
+			af.Pct = evt.Progress.Percentage
+			af.BytesTransferred = evt.Progress.BytesTransferred
+		}
 
 	case transfer.EventFileSizeMismatch:
 		m.dashboard.AddLogEntry(components.LogWarning,
@@ -689,10 +693,7 @@ func (m *model) applyTransferEvent(evt transfer.TransferEvent) {
 	case transfer.EventFileComplete:
 		card.CompletedFiles++
 		card.BytesDone += evt.File.Size
-		card.CurrentFile = ""
-		card.CurrentSpeed = ""
-		card.CurrentFileBytes = 0
-		card.CurrentFileSize = 0
+		delete(card.ActiveFiles, evt.File.RelPath)
 		if card.CompletedFiles+card.FailedFiles >= card.TotalFiles {
 			card.Done = true
 		}
@@ -704,6 +705,7 @@ func (m *model) applyTransferEvent(evt transfer.TransferEvent) {
 			fmt.Sprintf("%s/%s  retry %d/%d", card.CardName, evt.File.RelPath, evt.Retry, evt.MaxRetry))
 
 	case transfer.EventFileFailed:
+		delete(card.ActiveFiles, evt.File.RelPath)
 		card.FailedFiles++
 		if card.CompletedFiles+card.FailedFiles >= card.TotalFiles {
 			card.Done = true

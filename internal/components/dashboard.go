@@ -2,6 +2,7 @@ package components
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,15 +18,19 @@ type CardProgress struct {
 	FailedFiles    int
 	TotalBytes     int64
 	BytesDone      int64
-	CurrentFile      string
-	CurrentSpeed     string
-	CurrentPct       int
-	CurrentFileSize  int64
-	CurrentFileBytes int64
+	ActiveFiles map[string]*ActiveFile
 	Paused         bool
 	Waiting        bool
 	WaitingFor     string
 	Done           bool
+}
+
+// ActiveFile tracks an in-progress file transfer.
+type ActiveFile struct {
+	RelPath          string
+	Speed            string
+	Pct              int
+	BytesTransferred int64
 }
 
 // LogEntry is a single line in the scrollable log.
@@ -134,7 +139,9 @@ func (m DashboardModel) View() string {
 		failedFiles += c.FailedFiles
 		totalBytes += c.TotalBytes
 		doneBytes += c.BytesDone
-		inProgressBytes += c.CurrentFileBytes
+		for _, af := range c.ActiveFiles {
+			inProgressBytes += af.BytesTransferred
+		}
 	}
 
 	title := fmt.Sprintf("Importing from %d card(s)", len(m.Cards))
@@ -146,8 +153,12 @@ func (m DashboardModel) View() string {
 	var cardsView strings.Builder
 	for _, c := range m.Cards {
 		label := cardName.Render(fmt.Sprintf("  %s (%s)", c.CardName, c.VolumeName))
+		var activeBytes int64
+		for _, af := range c.ActiveFiles {
+			activeBytes += af.BytesTransferred
+		}
 		bar := renderProgressBar(c.CompletedFiles, c.TotalFiles, 30)
-		stats := fmt.Sprintf("  %d/%d  %s", c.CompletedFiles, c.TotalFiles, formatBytes(c.BytesDone))
+		stats := fmt.Sprintf("  %d/%d  %s", c.CompletedFiles, c.TotalFiles, formatBytes(c.BytesDone+activeBytes))
 
 		cardsView.WriteString(label)
 		cardsView.WriteString("      ")
@@ -165,12 +176,20 @@ func (m DashboardModel) View() string {
 			cardsView.WriteString(logWarnStyle.Render(fmt.Sprintf("    ⏳ Waiting for %s to reconnect...", c.WaitingFor)) + "\n")
 		} else if c.Paused {
 			cardsView.WriteString(logWarnStyle.Render("    ⚠ Volume disconnected") + "\n")
-		} else if c.CurrentFile != "" {
-			detail := fmt.Sprintf("    → %s", c.CurrentFile)
-			if c.CurrentSpeed != "" {
-				detail += speedStyle.Render(fmt.Sprintf("  (%s)", c.CurrentSpeed))
+		} else if len(c.ActiveFiles) > 0 {
+			keys := make([]string, 0, len(c.ActiveFiles))
+			for k := range c.ActiveFiles {
+				keys = append(keys, k)
 			}
-			cardsView.WriteString(detail + "\n")
+			sort.Strings(keys)
+			for _, k := range keys {
+				af := c.ActiveFiles[k]
+				detail := fmt.Sprintf("    → %s", af.RelPath)
+				if af.Speed != "" {
+					detail += speedStyle.Render(fmt.Sprintf("  (%s)", af.Speed))
+				}
+				cardsView.WriteString(detail + "\n")
+			}
 		}
 		cardsView.WriteString("\n")
 	}
