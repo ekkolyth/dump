@@ -150,6 +150,22 @@ func NewEngine(ctx context.Context, cards []CardSource, destBase, eventFolder st
 
 	sessionID := GenerateSessionID()
 	e.SessionID = sessionID
+
+	// Pre-mark files that already exist at destination with correct size
+	e.progress = NewProgressTracker(destBase, sessionID)
+	for _, card := range cards {
+		cardDir := card.FolderName
+		if cardDir == "" {
+			cardDir = fmt.Sprintf("CARD %d", card.CardIndex+1)
+		}
+		for _, f := range card.Files {
+			dest := filepath.Join(destBase, eventFolder, cardDir, f.RelPath)
+			if info, err := os.Stat(dest); err == nil && info.Size() == f.Size {
+				e.progress.MarkComplete(card.CardIndex, f.RelPath)
+			}
+		}
+	}
+
 	startedAt := time.Now().UTC().Format(time.RFC3339)
 
 	for i, card := range cards {
@@ -176,8 +192,6 @@ func NewEngine(ctx context.Context, cards []CardSource, destBase, eventFolder st
 	}); err != nil {
 		return nil, fmt.Errorf("write destination metadata: %w", err)
 	}
-
-	e.progress = NewProgressTracker(destBase, sessionID)
 
 	return e, nil
 }
