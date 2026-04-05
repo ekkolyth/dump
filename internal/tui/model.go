@@ -690,8 +690,10 @@ func (m *model) applyTransferEvent(evt transfer.TransferEvent) {
 		if card.ActiveFiles == nil {
 			card.ActiveFiles = make(map[string]*components.ActiveFile)
 		}
-		card.ActiveFiles[evt.File.RelPath] = &components.ActiveFile{
-			RelPath: evt.File.RelPath,
+		if _, exists := card.ActiveFiles[evt.File.RelPath]; !exists {
+			card.ActiveFiles[evt.File.RelPath] = &components.ActiveFile{
+				RelPath: evt.File.RelPath,
+			}
 		}
 
 	case transfer.EventFileProgress:
