@@ -17,9 +17,11 @@ type CardProgress struct {
 	FailedFiles    int
 	TotalBytes     int64
 	BytesDone      int64
-	CurrentFile    string
-	CurrentSpeed   string
-	CurrentPct     int
+	CurrentFile      string
+	CurrentSpeed     string
+	CurrentPct       int
+	CurrentFileSize  int64
+	CurrentFileBytes int64
 	Paused         bool
 	Waiting        bool
 	WaitingFor     string
@@ -125,13 +127,14 @@ func (m DashboardModel) View() string {
 
 	// Overall stats
 	totalFiles, doneFiles, failedFiles := 0, 0, 0
-	var totalBytes, doneBytes int64
+	var totalBytes, doneBytes, inProgressBytes int64
 	for _, c := range m.Cards {
 		totalFiles += c.TotalFiles
 		doneFiles += c.CompletedFiles
 		failedFiles += c.FailedFiles
 		totalBytes += c.TotalBytes
 		doneBytes += c.BytesDone
+		inProgressBytes += c.CurrentFileBytes
 	}
 
 	title := fmt.Sprintf("Importing from %d card(s)", len(m.Cards))
@@ -174,16 +177,17 @@ func (m DashboardModel) View() string {
 
 	// Overall stats bar
 	elapsed := time.Since(m.startTime).Round(time.Second)
+	effectiveBytes := doneBytes + inProgressBytes
 	eta := ""
-	if doneBytes > 0 && !m.AllDone {
-		rate := float64(doneBytes) / time.Since(m.startTime).Seconds()
-		remaining := float64(totalBytes-doneBytes) / rate
+	if effectiveBytes > 0 && !m.AllDone {
+		rate := float64(effectiveBytes) / time.Since(m.startTime).Seconds()
+		remaining := float64(totalBytes-effectiveBytes) / rate
 		eta = fmt.Sprintf("  ETA %s", time.Duration(remaining*float64(time.Second)).Round(time.Second))
 	}
 	overall := summaryStyle.Render(fmt.Sprintf(
 		"  Overall: %d/%d files  ·  %s / %s  ·  %s elapsed%s",
 		doneFiles, totalFiles,
-		formatBytes(doneBytes), formatBytes(totalBytes),
+		formatBytes(effectiveBytes), formatBytes(totalBytes),
 		elapsed, eta,
 	))
 

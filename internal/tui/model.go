@@ -25,6 +25,7 @@ const (
 	stepEventInput
 	stepConfirm
 	stepResumeSelect
+	stepCleanSelect
 	stepTransfer
 )
 
@@ -67,6 +68,7 @@ type model struct {
 	width  int
 	height int
 	err    string
+	status string
 }
 
 type cardSummary struct {
@@ -104,7 +106,7 @@ func InitialModel() model {
 	}
 
 	srcList := components.NewDriveList(driveInfos, true)
-	srcList.ExtraItems = []string{"Resume Session"}
+	srcList.ExtraItems = []string{"Resume Session", "Clean Drives"}
 
 	return model{
 		step:       stepSourceSelect,
@@ -351,6 +353,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateConfirm(msg)
 	case stepResumeSelect:
 		return m.updateResumeSelect(msg)
+	case stepCleanSelect:
+		return m.updateCleanSelect(msg)
 	case stepTransfer:
 		return m.updateTransfer(msg)
 	}
@@ -370,7 +374,7 @@ func (m model) handleBack() (tea.Model, tea.Cmd) {
 		m.step = stepClientInput
 	case stepConfirm:
 		m.step = stepEventInput
-	case stepResumeSelect:
+	case stepResumeSelect, stepCleanSelect:
 		m.step = stepSourceSelect
 	}
 	return m, nil
@@ -381,11 +385,17 @@ func (m model) updateSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case components.ExtraItemSelectedMsg:
-		if msg.Label == "Resume Session" {
-			m.step = stepResumeSelect
-			var resumeDrives []components.DriveInfo
+		if msg.Label == "Resume Session" || msg.Label == "Clean Drives" {
+			var targetStep wizardStep
+			if msg.Label == "Resume Session" {
+				targetStep = stepResumeSelect
+			} else {
+				targetStep = stepCleanSelect
+			}
+			m.step = targetStep
+			var drives []components.DriveInfo
 			for _, d := range m.allDrives {
-				resumeDrives = append(resumeDrives, components.DriveInfo{
+				drives = append(drives, components.DriveInfo{
 					VolumeName:     d.VolumeName,
 					MountPoint:     d.MountPoint,
 					DeviceID:       d.DeviceIdentifier,
@@ -395,7 +405,7 @@ func (m model) updateSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 					IsExternal:     d.IsExternal(),
 				})
 			}
-			m.destList = components.NewDriveList(resumeDrives, true)
+			m.destList = components.NewDriveList(drives, true)
 			return m, nil
 		}
 	case components.DriveSelectedMsg:
@@ -432,6 +442,33 @@ func (m model) updateSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	default:
 		m.sourceList, cmd = m.sourceList.Update(msg)
+	}
+
+	return m, cmd
+}
+
+func (m model) updateCleanSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case components.DriveSelectedMsg:
+		if len(msg.Selected) == 0 {
+			return m, nil
+		}
+
+		var cleaned []string
+		for _, idx := range msg.Selected {
+			drive := m.allDrives[idx]
+			transfer.RemoveDumpMetadata(drive.MountPoint)
+			transfer.RemoveProgressFile(drive.MountPoint)
+			cleaned = append(cleaned, drive.VolumeName)
+		}
+
+		m.status = fmt.Sprintf("Cleaned %d drive(s): %s", len(cleaned), strings.Join(cleaned, ", "))
+		m.step = stepSourceSelect
+		return m, nil
+	default:
+		m.destList, cmd = m.destList.Update(msg)
 	}
 
 	return m, cmd
@@ -636,11 +673,14 @@ func (m *model) applyTransferEvent(evt transfer.TransferEvent) {
 	switch evt.Type {
 	case transfer.EventFileStart:
 		card.CurrentFile = evt.File.RelPath
+		card.CurrentFileSize = evt.File.Size
+		card.CurrentFileBytes = 0
 
 	case transfer.EventFileProgress:
 		card.CurrentFile = evt.File.RelPath
 		card.CurrentSpeed = evt.Progress.Speed
 		card.CurrentPct = evt.Progress.Percentage
+		card.CurrentFileBytes = evt.Progress.BytesTransferred
 
 	case transfer.EventFileSizeMismatch:
 		m.dashboard.AddLogEntry(components.LogWarning,
@@ -651,6 +691,8 @@ func (m *model) applyTransferEvent(evt transfer.TransferEvent) {
 		card.BytesDone += evt.File.Size
 		card.CurrentFile = ""
 		card.CurrentSpeed = ""
+		card.CurrentFileBytes = 0
+		card.CurrentFileSize = 0
 		if card.CompletedFiles+card.FailedFiles >= card.TotalFiles {
 			card.Done = true
 		}
@@ -719,9 +761,21 @@ func (m model) View() string {
 		b.WriteString("\n")
 		b.WriteString("Welcome, Mel and/or Cass!")
 		b.WriteString("\n\n")
+		if m.status != "" {
+			b.WriteString(confirmKey.Render("  ✓ "+m.status) + "\n\n")
+		}
 		b.WriteString(titleStyle.Render("New Dump — Select Source Cards"))
 		b.WriteString("\n")
 		b.WriteString(m.sourceList.View())
+
+	case stepCleanSelect:
+		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("space: toggle | enter: clean | esc: back"))
+		b.WriteString("\n\n")
+		b.WriteString(titleStyle.Render("Clean Drives — Remove Transfer Metadata"))
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("Select drives to remove dump.json and progress files from"))
+		b.WriteString("\n\n")
+		b.WriteString(m.destList.View())
 
 	case stepResumeSelect:
 		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("space: toggle | enter: confirm | esc: back"))
