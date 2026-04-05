@@ -255,6 +255,7 @@ func (m model) updateResumeSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cancelEngine = cancel
 		m.sessionID = sessionID
 
+		completed := engine.CompletedStats()
 		dashCards := make([]components.CardProgress, len(engine.Cards))
 		for i, c := range engine.Cards {
 			dashCards[i] = components.CardProgress{
@@ -262,6 +263,10 @@ func (m model) updateResumeSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 				VolumeName: c.VolumeName,
 				TotalFiles: c.TotalFiles,
 				TotalBytes: c.TotalBytes,
+			}
+			if s, ok := completed[i]; ok {
+				dashCards[i].CompletedFiles = s.Files
+				dashCards[i].BytesDone = s.Bytes
 			}
 		}
 		m.dashboard = components.NewDashboard(dashCards)

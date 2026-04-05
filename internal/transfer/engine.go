@@ -232,6 +232,25 @@ func NewEngineResume(ctx context.Context, sessionID string, cards []CardSource, 
 	return e, nil
 }
 
+// CompletedStats returns per-card completed file count and bytes for pre-populating the dashboard.
+func (e *Engine) CompletedStats() map[int]struct{ Files int; Bytes int64 } {
+	stats := make(map[int]struct{ Files int; Bytes int64 })
+	for i, card := range e.Cards {
+		var files int
+		var bytes int64
+		for _, f := range card.Files {
+			if e.progress.IsComplete(card.CardIndex, f.RelPath) {
+				files++
+				bytes += f.Size
+			}
+		}
+		if files > 0 {
+			stats[i] = struct{ Files int; Bytes int64 }{files, bytes}
+		}
+	}
+	return stats
+}
+
 // waitForVolume polls for a volume matching the session's dump.json.
 // Returns the mount point when found, or error if context is cancelled.
 func (e *Engine) waitForVolume(scanRoot, role string, cardIndex int) (string, error) {
