@@ -10,6 +10,7 @@ import (
 	"github.com/ekkolyth/dump/internal/components"
 	driveutil "github.com/ekkolyth/dump/internal/drives"
 	"github.com/ekkolyth/dump/internal/transfer"
+	"github.com/ekkolyth/dump/internal/version"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -709,7 +710,7 @@ func (m model) View() string {
 
 	switch m.step {
 	case stepSourceSelect:
-		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("space: toggle | enter: select | esc: quit"))
+		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("space: toggle | enter: select | esc: quit"))
 		b.WriteString("\n")
 		b.WriteString("\n")
 		b.WriteString("Welcome, Mel and/or Cass!")
@@ -719,7 +720,7 @@ func (m model) View() string {
 		b.WriteString(m.sourceList.View())
 
 	case stepResumeSelect:
-		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("space: toggle | enter: confirm | esc: back"))
+		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("space: toggle | enter: confirm | esc: back"))
 		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("Resume Session — Select Drives"))
 		b.WriteString("\n")
@@ -728,21 +729,21 @@ func (m model) View() string {
 		b.WriteString(m.destList.View())
 
 	case stepDestSelect:
-		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("space: select | enter: confirm | esc: back"))
+		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("space: select | enter: confirm | esc: back"))
 		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("Step 2 — Select Destination Drive"))
 		b.WriteString("\n")
 		b.WriteString(m.destList.View())
 
 	case stepClientInput:
-		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("type client name | enter: confirm | esc: back"))
+		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("type client name | enter: confirm | esc: back"))
 		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("Step 3 — Client Name"))
 		b.WriteString("\n\n")
 		b.WriteString(fmt.Sprintf("  > %s█", m.textInput))
 
 	case stepEventInput:
-		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("type event name | enter: confirm | esc: back"))
+		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("type event name | enter: confirm | esc: back"))
 		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("Step 4 — Event Name"))
 		b.WriteString("\n")
@@ -751,7 +752,7 @@ func (m model) View() string {
 		b.WriteString(fmt.Sprintf("  > %s█", m.textInput))
 
 	case stepConfirm:
-		b.WriteString(titleInline.Render("Dump v0.0.1") + "  " + helpInline.Render("enter: start import | esc: back"))
+		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("enter: start import | esc: back"))
 		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("Step 5 — Confirm Import"))
 		b.WriteString("\n")

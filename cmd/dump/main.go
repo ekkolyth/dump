@@ -36,6 +36,8 @@ func main() {
 		}
 	}
 
+	fmt.Printf("dump v%s\n", version.Version)
+	fmt.Println("Scanning drives...")
 	runTUI(tui.InitialModel())
 }
 
