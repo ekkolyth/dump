@@ -71,6 +71,8 @@ func RsyncFile(src, dst string, onProgress func(Progress)) error {
 	args := []string{
 		"--partial",
 		"--progress",
+		"--append",
+		"--inplace",
 		src,
 		dst,
 	}
