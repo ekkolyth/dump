@@ -86,6 +86,7 @@ const (
 	EventFileComplete
 	EventFileRetry
 	EventFileFailed
+	EventFileSizeMismatch
 	EventCardPaused
 	EventCardWaiting
 	EventCardResumed
@@ -387,6 +388,15 @@ func (e *Engine) processJob(j *TransferJob) {
 			})
 
 			if err == nil {
+				// Verify destination file size matches source
+				if destInfo, statErr := os.Stat(j.Dest); statErr == nil && destInfo.Size() != j.File.Size {
+					e.Events <- TransferEvent{
+						Type:      EventFileSizeMismatch,
+						CardIndex: j.CardIndex,
+						File:      j.File,
+						Err:       fmt.Errorf("size mismatch: source %d bytes, dest %d bytes", j.File.Size, destInfo.Size()),
+					}
+				}
 				e.Events <- TransferEvent{
 					Type:      EventFileComplete,
 					CardIndex: j.CardIndex,

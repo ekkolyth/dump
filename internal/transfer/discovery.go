@@ -56,6 +56,11 @@ func DiscoverMediaFiles(root string) ([]MediaFile, error) {
 			return nil
 		}
 
+		// Skip macOS resource fork files (._*)
+		if strings.HasPrefix(info.Name(), "._") {
+			return nil
+		}
+
 		if !IsMediaFile(info.Name()) {
 			return nil
 		}

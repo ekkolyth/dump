@@ -642,6 +642,10 @@ func (m *model) applyTransferEvent(evt transfer.TransferEvent) {
 		card.CurrentSpeed = evt.Progress.Speed
 		card.CurrentPct = evt.Progress.Percentage
 
+	case transfer.EventFileSizeMismatch:
+		m.dashboard.AddLogEntry(components.LogWarning,
+			fmt.Sprintf("%s/%s  SIZE MISMATCH — %s", card.CardName, evt.File.RelPath, evt.Err.Error()))
+
 	case transfer.EventFileComplete:
 		card.CompletedFiles++
 		card.BytesDone += evt.File.Size
