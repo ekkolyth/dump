@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -344,9 +346,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			return m.handleBack()
 		case "q":
-			if m.step == stepTransfer && m.dashboard.AllDone {
-				return m, tea.Quit
-			}
+			// q no longer quits from the transfer done screen; use the menu instead
+			return m, nil
 		}
 	}
 
@@ -658,14 +659,95 @@ func (m model) updateTransfer(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "up", "k":
-			m.dashboard.ScrollUp()
-		case "down", "j":
-			m.dashboard.ScrollDown()
+		if m.dashboard.AllDone {
+			switch msg.String() {
+			case "up", "k":
+				m.dashboard.PostCursorUp()
+			case "down", "j":
+				m.dashboard.PostCursorDown()
+			case "enter":
+				return m.handlePostDoneChoice()
+			}
+		} else {
+			switch msg.String() {
+			case "up", "k":
+				m.dashboard.ScrollUp()
+			case "down", "j":
+				m.dashboard.ScrollDown()
+			}
 		}
 	}
 
+	return m, nil
+}
+
+// deleteSourceCards removes all files from the input drives that were part of this dump.
+func (m *model) deleteSourceCards() {
+	if m.engine == nil {
+		return
+	}
+	for _, card := range m.engine.Cards {
+		entries, err := os.ReadDir(card.MountPoint)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			name := entry.Name()
+			// Skip hidden files/dirs (e.g. .Spotlight, .Trashes, .fseventsd)
+			if strings.HasPrefix(name, ".") {
+				continue
+			}
+			path := filepath.Join(card.MountPoint, name)
+			os.RemoveAll(path)
+		}
+	}
+}
+
+func (m model) handlePostDoneChoice() (tea.Model, tea.Cmd) {
+	switch m.dashboard.PostCursor {
+	case components.PostDoneDeleteCards:
+		m.deleteSourceCards()
+		m.status = fmt.Sprintf("Deleted files from %d card(s)", len(m.engine.Cards))
+		// Re-discover drives and go back to main menu
+		return m.resetToMainMenu()
+	case components.PostDoneDeleteAndExit:
+		m.deleteSourceCards()
+		return m, tea.Quit
+	case components.PostDoneBackToMenu:
+		return m.resetToMainMenu()
+	}
+	return m, nil
+}
+
+func (m model) resetToMainMenu() (tea.Model, tea.Cmd) {
+	drives, err := driveutil.DiscoverDrives()
+	if err != nil {
+		m.err = fmt.Sprintf("Failed to discover drives: %v", err)
+		return m, nil
+	}
+
+	driveInfos := make([]components.DriveInfo, len(drives))
+	for i, d := range drives {
+		driveInfos[i] = components.DriveInfo{
+			VolumeName:     d.VolumeName,
+			MountPoint:     d.MountPoint,
+			DeviceID:       d.DeviceIdentifier,
+			TotalSize:      driveutil.FormatSize(d.TotalSize),
+			FreeSpace:      driveutil.FormatSize(d.EffectiveFreeSpace()),
+			FilesystemName: d.FilesystemName,
+			IsExternal:     d.IsExternal(),
+		}
+	}
+
+	srcList := components.NewDriveList(driveInfos, true)
+	srcList.ExtraItems = []string{"Resume Session", "Clean Drives"}
+
+	m.allDrives = drives
+	m.sourceList = srcList
+	m.engine = nil
+	m.cancelEngine = nil
+	m.sessionID = ""
+	m.step = stepSourceSelect
 	return m, nil
 }
 

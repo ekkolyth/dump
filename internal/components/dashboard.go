@@ -50,6 +50,16 @@ const (
 	LogReconnected
 )
 
+// PostDoneChoice represents the selected option on the completion screen.
+type PostDoneChoice int
+
+const (
+	PostDoneDeleteCards PostDoneChoice = iota
+	PostDoneDeleteAndExit
+	PostDoneBackToMenu
+	postDoneCount // sentinel for wrapping
+)
+
 // DashboardModel displays transfer progress and a scrollable log.
 type DashboardModel struct {
 	Cards     []CardProgress
@@ -59,6 +69,7 @@ type DashboardModel struct {
 	width     int
 	height    int
 	AllDone   bool
+	PostCursor PostDoneChoice
 }
 
 func NewDashboard(cards []CardProgress) DashboardModel {
@@ -99,6 +110,20 @@ func (m DashboardModel) logVisibleLines() int {
 func (m *DashboardModel) ScrollUp() {
 	if m.logOffset > 0 {
 		m.logOffset--
+	}
+}
+
+// PostCursorUp moves the post-done menu cursor up.
+func (m *DashboardModel) PostCursorUp() {
+	if m.PostCursor > 0 {
+		m.PostCursor--
+	}
+}
+
+// PostCursorDown moves the post-done menu cursor down.
+func (m *DashboardModel) PostCursorDown() {
+	if m.PostCursor < postDoneCount-1 {
+		m.PostCursor++
 	}
 }
 
@@ -268,7 +293,22 @@ func (m DashboardModel) View() string {
 			summary += logFailStyle.Render(fmt.Sprintf("  ·  %d failed", failedFiles))
 		}
 		b.WriteString(summaryStyle.Render(summary))
-		b.WriteString("\n  Press q to exit")
+		b.WriteString("\n\n")
+
+		options := []string{
+			"Delete Cards",
+			"Delete Cards and Exit",
+			"Back to Main Menu",
+		}
+		for i, opt := range options {
+			cursor := "  "
+			if PostDoneChoice(i) == m.PostCursor {
+				cursor = summaryStyle.Render("> ")
+				b.WriteString(cursor + summaryStyle.Render(opt) + "\n")
+			} else {
+				b.WriteString(cursor + opt + "\n")
+			}
+		}
 	}
 
 	return b.String()
