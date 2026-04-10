@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -373,6 +375,8 @@ func (e *Engine) processJob(j *TransferJob) {
 			}
 			return
 		}
+		// Clear hidden flags on destination directories that cameras may set
+		unhideAll(destDir, filepath.Join(e.DestBase, e.EventFolder))
 
 		e.Events <- TransferEvent{
 			Type:      EventFileStart,
@@ -498,4 +502,16 @@ func (e *Engine) ensureAndUpdateDest(scanRoot string, j *TransferJob) error {
 		}
 	}
 	return nil
+}
+
+// unhideAll walks from dir up to (but not including) stopAt,
+// clearing macOS hidden flags on each directory.
+func unhideAll(dir, stopAt string) {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	for dir != stopAt && len(dir) > len(stopAt) {
+		exec.Command("chflags", "nohidden", dir).Run()
+		dir = filepath.Dir(dir)
+	}
 }
