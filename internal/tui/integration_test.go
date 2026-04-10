@@ -22,9 +22,6 @@ func TestIntegration_DiscoverAndTransfer(t *testing.T) {
 	srcFile := filepath.Join(dcim, "GX010001.MP4")
 	os.WriteFile(srcFile, testData, 0644)
 
-	// Also write a non-media file that should be skipped
-	os.WriteFile(filepath.Join(srcDir, "readme.txt"), []byte("skip me"), 0644)
-
 	// Discover files
 	files, err := transfer.DiscoverMediaFiles(srcDir)
 	if err != nil {

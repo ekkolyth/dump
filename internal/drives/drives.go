@@ -3,6 +3,7 @@ package drives
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -98,6 +99,11 @@ func DiscoverDrives() ([]DiskInfo, error) {
 		// Skip disk images (e.g. mounted .dmg installers)
 		if info.BusProtocol == "Disk Image" {
 			continue
+		}
+
+		// Fall back to mount point basename if volume name is empty
+		if info.VolumeName == "" && info.MountPoint != "" {
+			info.VolumeName = filepath.Base(info.MountPoint)
 		}
 
 		drives = append(drives, info)
