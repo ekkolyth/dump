@@ -1,6 +1,8 @@
 package drives
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"howett.net/plist"
@@ -119,6 +121,55 @@ func TestParseDiskInfoAPFS(t *testing.T) {
 	}
 	if info.IsExternal() {
 		t.Error("IsExternal() = true, want false for internal APFS")
+	}
+}
+
+func TestDiscoverNetworkVolumes(t *testing.T) {
+	root := t.TempDir()
+
+	// Create fake mount points
+	os.MkdirAll(filepath.Join(root, "NAS-Share"), 0755)
+	os.MkdirAll(filepath.Join(root, "Backup-Drive"), 0755)
+	os.MkdirAll(filepath.Join(root, ".hidden"), 0755)
+	os.MkdirAll(filepath.Join(root, "Macintosh HD"), 0755)
+	os.MkdirAll(filepath.Join(root, "Already-Found"), 0755)
+
+	// "Already-Found" is in the seen set (already discovered by diskutil)
+	seen := map[string]bool{
+		filepath.Join(root, "Already-Found"): true,
+	}
+
+	drives := discoverNetworkVolumes(root, seen)
+
+	// Should find NAS-Share and Backup-Drive only
+	names := make(map[string]bool)
+	for _, d := range drives {
+		names[d.VolumeName] = true
+		if !d.IsNetwork {
+			t.Errorf("drive %q: IsNetwork = false, want true", d.VolumeName)
+		}
+		if d.FilesystemName != "Network" {
+			t.Errorf("drive %q: FilesystemName = %q, want %q", d.VolumeName, d.FilesystemName, "Network")
+		}
+		if d.TotalSize <= 0 {
+			t.Errorf("drive %q: TotalSize = %d, want > 0", d.VolumeName, d.TotalSize)
+		}
+	}
+
+	if !names["NAS-Share"] {
+		t.Error("missing NAS-Share in results")
+	}
+	if !names["Backup-Drive"] {
+		t.Error("missing Backup-Drive in results")
+	}
+	if names[".hidden"] {
+		t.Error("hidden directory should be skipped")
+	}
+	if names["Macintosh HD"] {
+		t.Error("Macintosh HD should be skipped")
+	}
+	if names["Already-Found"] {
+		t.Error("already-seen drive should be skipped")
 	}
 }
 

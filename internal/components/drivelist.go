@@ -17,6 +17,7 @@ type DriveInfo struct {
 	FreeSpace      string
 	FilesystemName string
 	IsExternal     bool
+	IsNetwork      bool
 }
 
 // DriveSelectedMsg is sent when the user confirms their selection.
@@ -103,6 +104,7 @@ var (
 	driveSelected = lipgloss.NewStyle().Foreground(lipgloss.Color("#AD8CFF"))
 	driveExtLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94")).Bold(true)
 	driveIntLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C6C6C"))
+	driveNetLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("#5DE4F2")).Bold(true)
 )
 
 func (m DriveListModel) View() string {
@@ -120,7 +122,9 @@ func (m DriveListModel) View() string {
 		}
 
 		typeLabel := driveIntLabel.Render("INT")
-		if d.IsExternal {
+		if d.IsNetwork {
+			typeLabel = driveNetLabel.Render("NET")
+		} else if d.IsExternal {
 			typeLabel = driveExtLabel.Render("EXT")
 		}
 

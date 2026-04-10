@@ -104,6 +104,7 @@ func InitialModel() model {
 			FreeSpace:      driveutil.FormatSize(d.EffectiveFreeSpace()),
 			FilesystemName: d.FilesystemName,
 			IsExternal:     d.IsExternal(),
+			IsNetwork:      d.IsNetwork,
 		}
 	}
 
@@ -736,6 +737,7 @@ func (m model) resetToMainMenu() (tea.Model, tea.Cmd) {
 			FreeSpace:      driveutil.FormatSize(d.EffectiveFreeSpace()),
 			FilesystemName: d.FilesystemName,
 			IsExternal:     d.IsExternal(),
+			IsNetwork:      d.IsNetwork,
 		}
 	}
 

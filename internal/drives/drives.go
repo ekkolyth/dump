@@ -2,10 +2,12 @@ package drives
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 
 	"howett.net/plist"
 )
@@ -26,6 +28,7 @@ type DiskInfo struct {
 	Ejectable                      bool   `plist:"Ejectable"`
 	BusProtocol                    string `plist:"BusProtocol"`
 	WholeDisk                      bool   `plist:"WholeDisk"`
+	IsNetwork                      bool
 }
 
 func (d *DiskInfo) IsExternal() bool {
@@ -109,6 +112,13 @@ func DiscoverDrives() ([]DiskInfo, error) {
 		drives = append(drives, info)
 	}
 
+	// Scan /Volumes for network mounts that diskutil doesn't report
+	seen := make(map[string]bool, len(drives))
+	for _, d := range drives {
+		seen[d.MountPoint] = true
+	}
+	drives = append(drives, discoverNetworkVolumes("/Volumes", seen)...)
+
 	// Sort: external first, then by volume name
 	sort.Slice(drives, func(i, j int) bool {
 		if drives[i].IsExternal() != drives[j].IsExternal() {
@@ -118,4 +128,50 @@ func DiscoverDrives() ([]DiskInfo, error) {
 	})
 
 	return drives, nil
+}
+
+// discoverNetworkVolumes scans a directory for mounted volumes not already
+// in the seen set. This catches SMB/AFP/NFS mounts that diskutil misses.
+func discoverNetworkVolumes(root string, seen map[string]bool) []DiskInfo {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+
+	var drives []DiskInfo
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		name := e.Name()
+
+		// Skip hidden entries and the boot volume
+		if strings.HasPrefix(name, ".") || name == "Macintosh HD" {
+			continue
+		}
+
+		mountPoint := filepath.Join(root, name)
+		if seen[mountPoint] {
+			continue
+		}
+
+		var stat syscall.Statfs_t
+		if err := syscall.Statfs(mountPoint, &stat); err != nil {
+			continue
+		}
+
+		totalSize := int64(stat.Bsize) * int64(stat.Blocks)
+		freeSpace := int64(stat.Bsize) * int64(stat.Bavail)
+
+		drives = append(drives, DiskInfo{
+			VolumeName:                     name,
+			MountPoint:                     mountPoint,
+			TotalSize:                      totalSize,
+			FreeSpace:                      freeSpace,
+			FilesystemName:                 "Network",
+			RemovableMediaOrExternalDevice: true,
+			IsNetwork:                      true,
+		})
+	}
+	return drives
 }
