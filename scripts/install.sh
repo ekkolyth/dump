@@ -37,7 +37,16 @@ if [ -z "$TAG" ]; then
   exit 1
 fi
 
-ASSET="dump_${TAG}_${OS}_${ARCH}.tar.gz"
+# Use macOS 11 build for older macOS versions
+SUFFIX=""
+if [ "$OS" = "darwin" ]; then
+  MACOS_VERSION=$(sw_vers -productVersion | cut -d. -f1)
+  if [ "$MACOS_VERSION" -lt 12 ] 2>/dev/null; then
+    SUFFIX="_macos11"
+  fi
+fi
+
+ASSET="dump_${TAG}_${OS}_${ARCH}${SUFFIX}.tar.gz"
 URL="https://github.com/$REPO/releases/download/v${TAG}/$ASSET"
 
 # Download and extract

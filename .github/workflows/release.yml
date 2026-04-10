@@ -41,35 +41,51 @@ jobs:
         include:
           - goos: darwin
             goarch: amd64
+            go-version-file: go.mod
           - goos: darwin
             goarch: arm64
+            go-version-file: go.mod
+          - goos: darwin
+            goarch: amd64
+            go-version: '1.24'
+            suffix: _macos11
+          - goos: darwin
+            goarch: arm64
+            go-version: '1.24'
+            suffix: _macos11
           - goos: linux
             goarch: amd64
+            go-version-file: go.mod
           - goos: linux
             goarch: arm64
+            go-version-file: go.mod
           - goos: windows
             goarch: amd64
+            go-version-file: go.mod
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ matrix.go-version || '' }}
+          go-version-file: ${{ matrix.go-version && '' || 'go.mod' }}
 
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
         run: |
           VERSION="${{ needs.version.outputs.version }}"
+          SUFFIX="${{ matrix.suffix }}"
           EXT=""
           if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
           go build -ldflags "-X github.com/ekkolyth/dump/internal/version.Version=$VERSION" \
-            -o "dump-$GOOS-$GOARCH$EXT" ./cmd/dump
+            -o "dump-$GOOS-$GOARCH$SUFFIX$EXT" ./cmd/dump
 
       - uses: actions/upload-artifact@v4
         with:
-          name: dump-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: dump-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
           path: dump-*
 
   release:
@@ -91,18 +107,19 @@ jobs:
             binary=$(ls "$dir")
             platform=$(echo "$binary" | sed 's/dump-//' | sed 's/\.exe$//')
             os=$(echo "$platform" | cut -d- -f1)
-            arch=$(echo "$platform" | cut -d- -f2)
+            arch=$(echo "$platform" | cut -d- -f2 | sed 's/_.*//')
+            suffix=$(echo "$platform" | grep -o '_macos11' || true)
 
             if echo "$binary" | grep -q '\.exe$'; then
               # Windows: zip
               cp "$dir/$binary" dump.exe
-              zip "dist/dump_${VERSION}_${os}_${arch}.zip" dump.exe
+              zip "dist/dump_${VERSION}_${os}_${arch}${suffix}.zip" dump.exe
               rm dump.exe
             else
               # macOS/Linux: tar.gz
               cp "$dir/$binary" dump
               chmod +x dump
-              tar -czf "dist/dump_${VERSION}_${os}_${arch}.tar.gz" dump
+              tar -czf "dist/dump_${VERSION}_${os}_${arch}${suffix}.tar.gz" dump
               rm dump
             fi
           done

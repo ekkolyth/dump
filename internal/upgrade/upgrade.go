@@ -9,8 +9,10 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/ekkolyth/dump/internal/version"
@@ -112,7 +114,26 @@ func assetName(ver, goos, goarch string) string {
 	if goos == "windows" {
 		ext = "zip"
 	}
-	return fmt.Sprintf("dump_%s_%s_%s.%s", ver, goos, goarch, ext)
+	suffix := ""
+	if goos == "darwin" {
+		suffix = macosSuffix()
+	}
+	return fmt.Sprintf("dump_%s_%s_%s%s.%s", ver, goos, goarch, suffix, ext)
+}
+
+func macosSuffix() string {
+	out, err := exec.Command("sw_vers", "-productVersion").Output()
+	if err != nil {
+		return ""
+	}
+	major, err := strconv.Atoi(strings.Split(strings.TrimSpace(string(out)), ".")[0])
+	if err != nil {
+		return ""
+	}
+	if major < 12 {
+		return "_macos11"
+	}
+	return ""
 }
 
 func download(url, dest string) error {
