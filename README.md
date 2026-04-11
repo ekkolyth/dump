@@ -31,10 +31,10 @@ miso build              # or: scripts/build.sh
 miso test               # or: scripts/test.sh
 
 # install dev build locally
-miso local:install      # installs to $GOPATH/bin/dump
+miso local/install      # installs to $GOPATH/bin/dump
 
 # remove dev build
-miso local:uninstall
+miso local/uninstall
 ```
 
 ### Project structure
