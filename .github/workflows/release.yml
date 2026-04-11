@@ -1,6 +1,6 @@
 name: Release
 
-run-name: "release: v${{ github.event.inputs.version || '' }}"
+run-name: "release: v${{ inputs.version || 'pending' }}"
 
 on:
   push:
@@ -133,7 +133,7 @@ jobs:
             cp "$dir/$binary" dump
             chmod +x dump
             if [ "$os" = "darwin" ]; then
-              cp artifacts/icon.icns icon.icns 2>/dev/null || true
+              cp artifacts/icon.icns/icon.icns icon.icns 2>/dev/null || true
               tar -czf "dist/dump_${VERSION}_${os}_${arch}${suffix}.tar.gz" dump icon.icns
               rm -f icon.icns
             else
