@@ -89,8 +89,27 @@ jobs:
           name: dump-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
           path: dump-*
 
+  icon:
+    needs: version
+    if: needs.version.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Generate icon
+        run: |
+          bun install
+          bun run scripts/generate-icon.ts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: icon.icns
+          path: build/icon.icns
+
   release:
-    needs: [version, build]
+    needs: [version, build, icon]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -113,7 +132,13 @@ jobs:
 
             cp "$dir/$binary" dump
             chmod +x dump
-            tar -czf "dist/dump_${VERSION}_${os}_${arch}${suffix}.tar.gz" dump
+            if [ "$os" = "darwin" ]; then
+              cp artifacts/icon.icns icon.icns 2>/dev/null || true
+              tar -czf "dist/dump_${VERSION}_${os}_${arch}${suffix}.tar.gz" dump icon.icns
+              rm -f icon.icns
+            else
+              tar -czf "dist/dump_${VERSION}_${os}_${arch}${suffix}.tar.gz" dump
+            fi
             rm dump
           done
 

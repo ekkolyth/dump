@@ -71,6 +71,9 @@ type model struct {
 	height int
 	err    string
 	status string
+
+	// Exit signals
+	wantsUpgrade bool
 }
 
 type cardSummary struct {
@@ -109,13 +112,21 @@ func InitialModel() model {
 	}
 
 	srcList := components.NewDriveList(driveInfos, true)
-	srcList.ExtraItems = []string{"Resume Session", "Clean Drives"}
+	srcList.ExtraItems = []string{"Update Dump", "Resume Session", "Clean Drives"}
 
 	return model{
 		step:       stepSourceSelect,
 		allDrives:  drives,
 		sourceList: srcList,
 	}
+}
+
+// WantsUpgrade returns true if the user selected "Update Dump" from the menu.
+func WantsUpgrade(m tea.Model) bool {
+	if mdl, ok := m.(model); ok {
+		return mdl.wantsUpgrade
+	}
+	return false
 }
 
 func ResumeModel(sessionID string) model {
@@ -397,6 +408,10 @@ func (m model) updateSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case components.ExtraItemSelectedMsg:
+		if msg.Label == "Update Dump" {
+			m.wantsUpgrade = true
+			return m, tea.Quit
+		}
 		if msg.Label == "Resume Session" || msg.Label == "Clean Drives" {
 			var targetStep wizardStep
 			if msg.Label == "Resume Session" {
@@ -742,7 +757,7 @@ func (m model) resetToMainMenu() (tea.Model, tea.Cmd) {
 	}
 
 	srcList := components.NewDriveList(driveInfos, true)
-	srcList.ExtraItems = []string{"Resume Session", "Clean Drives"}
+	srcList.ExtraItems = []string{"Update Dump", "Resume Session", "Clean Drives"}
 
 	m.allDrives = drives
 	m.sourceList = srcList

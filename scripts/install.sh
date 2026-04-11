@@ -64,12 +64,49 @@ chmod +x "$INSTALL_DIR/dump"
 echo ""
 echo "dump v${TAG} installed to $INSTALL_DIR/dump"
 
-# Create desktop shortcut on macOS
+# Create Dump.app on macOS
 if [ "$OS" = "darwin" ]; then
-  SHORTCUT="$HOME/Desktop/Dump.command"
-  printf '#!/bin/bash\n%s/dump\n' "$INSTALL_DIR" > "$SHORTCUT"
-  chmod +x "$SHORTCUT"
-  echo "Desktop shortcut created at $SHORTCUT"
+  APP="$HOME/Desktop/Dump.app"
+  rm -rf "$APP"
+  mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+
+  # Copy icon if included in the archive
+  if [ -f "$TMP/icon.icns" ]; then
+    cp "$TMP/icon.icns" "$APP/Contents/Resources/icon.icns"
+  fi
+
+  # Launcher script
+  cat > "$APP/Contents/MacOS/Dump" << 'LAUNCHER'
+#!/bin/bash
+open -a Terminal "$HOME/.local/bin/dump"
+LAUNCHER
+  chmod +x "$APP/Contents/MacOS/Dump"
+
+  # Info.plist
+  cat > "$APP/Contents/Info.plist" << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>Dump</string>
+  <key>CFBundleExecutable</key>
+  <string>Dump</string>
+  <key>CFBundleIconFile</key>
+  <string>icon</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.ekkolyth.dump</string>
+  <key>CFBundleVersion</key>
+  <string>${TAG}</string>
+  <key>CFBundleShortVersionString</key>
+  <string>${TAG}</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+</dict>
+</plist>
+PLIST
+
+  echo "Dump.app created on Desktop"
 fi
 
 # Check PATH

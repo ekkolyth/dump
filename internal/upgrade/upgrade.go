@@ -72,32 +72,65 @@ func Run() error {
 	}
 
 	if runtime.GOOS == "darwin" {
-		installDesktopShortcut(currentBinary)
+		installDesktopApp(currentBinary)
 	}
 
 	fmt.Printf("Successfully upgraded to v%s\n", latest)
 	return nil
 }
 
-// installDesktopShortcut creates a Dump.command file on the user's Desktop
+// installDesktopApp creates a Dump.app bundle on the user's Desktop
 // so they can double-click to launch dump from Finder.
-func installDesktopShortcut(binaryPath string) {
+func installDesktopApp(binaryPath string) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return
 	}
-	shortcut := filepath.Join(home, "Desktop", "Dump.command")
-	content := "#!/bin/bash\n" + binaryPath + "\n"
 
-	// Don't overwrite if it already exists and is correct
-	if existing, err := os.ReadFile(shortcut); err == nil && string(existing) == content {
+	app := filepath.Join(home, "Desktop", "Dump.app")
+	contentsDir := filepath.Join(app, "Contents")
+	macosDir := filepath.Join(contentsDir, "MacOS")
+	resourcesDir := filepath.Join(contentsDir, "Resources")
+
+	if err := os.MkdirAll(macosDir, 0755); err != nil {
+		return
+	}
+	if err := os.MkdirAll(resourcesDir, 0755); err != nil {
 		return
 	}
 
-	if err := os.WriteFile(shortcut, []byte(content), 0755); err != nil {
-		return // silently skip if Desktop doesn't exist or isn't writable
+	// Launcher script
+	launcher := "#!/bin/bash\nopen -a Terminal " + binaryPath + "\n"
+	if err := os.WriteFile(filepath.Join(macosDir, "Dump"), []byte(launcher), 0755); err != nil {
+		return
 	}
-	fmt.Printf("Desktop shortcut created at %s\n", shortcut)
+
+	// Info.plist
+	plist := `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>Dump</string>
+  <key>CFBundleExecutable</key>
+  <string>Dump</string>
+  <key>CFBundleIconFile</key>
+  <string>icon</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.ekkolyth.dump</string>
+  <key>CFBundleVersion</key>
+  <string>` + version.Version + `</string>
+  <key>CFBundleShortVersionString</key>
+  <string>` + version.Version + `</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+</dict>
+</plist>`
+	if err := os.WriteFile(filepath.Join(contentsDir, "Info.plist"), []byte(plist), 0644); err != nil {
+		return
+	}
+
+	fmt.Printf("Dump.app updated on Desktop\n")
 }
 
 func fetchLatestVersion() (string, error) {

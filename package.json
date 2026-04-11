@@ -1,5 +1,9 @@
 {
   "name": "dump",
   "version": "0.2.1",
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "png2icons": "^2.0.1",
+    "sharp": "^0.34.5"
+  }
 }

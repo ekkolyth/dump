@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"syscall"
 
 	"github.com/ekkolyth/dump/internal/tui"
 	"github.com/ekkolyth/dump/internal/upgrade"
@@ -45,9 +46,26 @@ func main() {
 
 func runTUI(m tea.Model) {
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+
+	if tui.WantsUpgrade(finalModel) {
+		fmt.Println()
+		if err := runUpgrade(); err != nil {
+			fmt.Fprintf(os.Stderr, "Upgrade failed: %v\n", err)
+			os.Exit(1)
+		}
+		// Re-exec the new binary
+		binary, err := os.Executable()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("\nRestarting dump...")
+		syscall.Exec(binary, []string{"dump"}, os.Environ())
 	}
 }
 
