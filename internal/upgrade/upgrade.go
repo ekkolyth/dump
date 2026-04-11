@@ -2,7 +2,6 @@ package upgrade
 
 import (
 	"archive/tar"
-	"archive/zip"
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
@@ -54,19 +53,9 @@ func Run() error {
 	}
 
 	binaryName := "dump"
-	if runtime.GOOS == "windows" {
-		binaryName = "dump.exe"
-	}
-
 	extractedPath := filepath.Join(tmpDir, binaryName)
-	if strings.HasSuffix(asset, ".zip") {
-		if err := extractZip(archivePath, tmpDir, binaryName); err != nil {
-			return fmt.Errorf("failed to extract: %w", err)
-		}
-	} else {
-		if err := extractTarGz(archivePath, tmpDir, binaryName); err != nil {
-			return fmt.Errorf("failed to extract: %w", err)
-		}
+	if err := extractTarGz(archivePath, tmpDir, binaryName); err != nil {
+		return fmt.Errorf("failed to extract: %w", err)
 	}
 
 	currentBinary, err := os.Executable()
@@ -82,8 +71,33 @@ func Run() error {
 		return fmt.Errorf("failed to replace binary: %w", err)
 	}
 
+	if runtime.GOOS == "darwin" {
+		installDesktopShortcut(currentBinary)
+	}
+
 	fmt.Printf("Successfully upgraded to v%s\n", latest)
 	return nil
+}
+
+// installDesktopShortcut creates a Dump.command file on the user's Desktop
+// so they can double-click to launch dump from Finder.
+func installDesktopShortcut(binaryPath string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	shortcut := filepath.Join(home, "Desktop", "Dump.command")
+	content := "#!/bin/bash\n" + binaryPath + "\n"
+
+	// Don't overwrite if it already exists and is correct
+	if existing, err := os.ReadFile(shortcut); err == nil && string(existing) == content {
+		return
+	}
+
+	if err := os.WriteFile(shortcut, []byte(content), 0755); err != nil {
+		return // silently skip if Desktop doesn't exist or isn't writable
+	}
+	fmt.Printf("Desktop shortcut created at %s\n", shortcut)
 }
 
 func fetchLatestVersion() (string, error) {
@@ -110,15 +124,11 @@ func parseVersionTag(tag string) string {
 }
 
 func assetName(ver, goos, goarch string) string {
-	ext := "tar.gz"
-	if goos == "windows" {
-		ext = "zip"
-	}
 	suffix := ""
 	if goos == "darwin" {
 		suffix = macosSuffix()
 	}
-	return fmt.Sprintf("dump_%s_%s_%s%s.%s", ver, goos, goarch, suffix, ext)
+	return fmt.Sprintf("dump_%s_%s_%s%s.tar.gz", ver, goos, goarch, suffix)
 }
 
 func macosSuffix() string {
@@ -186,33 +196,6 @@ func extractTarGz(archive, destDir, binaryName string) error {
 			}
 			defer out.Close()
 			_, err = io.Copy(out, tr)
-			return err
-		}
-	}
-	return fmt.Errorf("binary %s not found in archive", binaryName)
-}
-
-func extractZip(archive, destDir, binaryName string) error {
-	r, err := zip.OpenReader(archive)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-
-	for _, f := range r.File {
-		if filepath.Base(f.Name) == binaryName {
-			rc, err := f.Open()
-			if err != nil {
-				return err
-			}
-			defer rc.Close()
-
-			out, err := os.OpenFile(filepath.Join(destDir, binaryName), os.O_CREATE|os.O_WRONLY, 0755)
-			if err != nil {
-				return err
-			}
-			defer out.Close()
-			_, err = io.Copy(out, rc)
 			return err
 		}
 	}

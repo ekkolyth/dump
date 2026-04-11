@@ -10,8 +10,7 @@ case "$OS" in
   Darwin) OS="darwin" ;;
   Linux)  OS="linux" ;;
   *)
-    echo "Unsupported OS: $OS"
-    echo "Windows users: download from https://github.com/$REPO/releases"
+    echo "Unsupported OS: $OS (dump supports macOS and Linux)"
     exit 1
     ;;
 esac
@@ -64,6 +63,14 @@ chmod +x "$INSTALL_DIR/dump"
 
 echo ""
 echo "dump v${TAG} installed to $INSTALL_DIR/dump"
+
+# Create desktop shortcut on macOS
+if [ "$OS" = "darwin" ]; then
+  SHORTCUT="$HOME/Desktop/Dump.command"
+  printf '#!/bin/bash\n%s/dump\n' "$INSTALL_DIR" > "$SHORTCUT"
+  chmod +x "$SHORTCUT"
+  echo "Desktop shortcut created at $SHORTCUT"
+fi
 
 # Check PATH
 if ! echo "$PATH" | tr ':' '\n' | grep -q "$INSTALL_DIR"; then

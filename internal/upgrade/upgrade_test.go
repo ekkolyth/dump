@@ -12,12 +12,6 @@ func TestAssetName(t *testing.T) {
 	}
 }
 
-func TestAssetNameWindows(t *testing.T) {
-	name := assetName("1.2.3", "windows", "amd64")
-	if name != "dump_1.2.3_windows_amd64.zip" {
-		t.Fatalf("unexpected asset name: %s", name)
-	}
-}
 
 func TestAssetNameCurrentPlatform(t *testing.T) {
 	name := assetName("1.0.0", runtime.GOOS, runtime.GOARCH)
