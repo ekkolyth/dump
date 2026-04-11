@@ -1,10 +1,10 @@
 # dump
 
-<p align="center">
+<p align="left">
   <img src="build/icon.png" alt="dump" width="128" height="128">
 </p>
 
-### What Is It
+### What It Is
 
 A tiny CLI tool for transferring files from camera cards (or whatever other storage device you have) to drives. Copies everything on the card, tracks transfer progress, and resumes interrupted transfers when things go wrong.
 
@@ -60,3 +60,5 @@ scripts/
   install.sh               # end-user install script
   local/                   # dev convenience scripts
 ```
+
+### Contributions welcome!
