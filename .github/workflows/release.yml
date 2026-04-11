@@ -1,7 +1,5 @@
 name: Release
 
-run-name: "release: v${{ inputs.version || 'pending' }}"
-
 on:
   push:
     branches: [main]
