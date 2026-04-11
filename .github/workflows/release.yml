@@ -1,10 +1,16 @@
 name: Release
 
+run-name: "release: v${{ github.event.inputs.version || '' }}"
+
 on:
   push:
     branches: [main]
     paths: ['package.json']
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (for display only)'
+        required: false
 
 jobs:
   version:
