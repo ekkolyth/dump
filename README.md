@@ -1,6 +1,12 @@
 # dump
 
-CLI tool for transferring files from camera cards to drives. Copies everything on the card, tracks progress, and resumes interrupted transfers.
+<p align="center">
+  <img src="build/icon.png" alt="dump" width="128" height="128">
+</p>
+
+### What Is It
+
+A tiny CLI tool for transferring files from camera cards (or whatever other storage device you have) to drives. Copies everything on the card, tracks transfer progress, and resumes interrupted transfers when things go wrong.
 
 Supports macOS and Linux. Requires `rsync`.
 
