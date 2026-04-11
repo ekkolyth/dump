@@ -1,6 +1,6 @@
 {
   "name": "dump",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "devDependencies": {
     "png2icons": "^2.0.1",
