@@ -66,6 +66,8 @@ echo "dump v${TAG} installed to $INSTALL_DIR/dump"
 
 # Create Dump.app on macOS
 if [ "$OS" = "darwin" ]; then
+  # Clean up old shortcut format
+  rm -f "$HOME/Desktop/Dump.command"
   APP="$HOME/Desktop/Dump.app"
   rm -rf "$APP"
   mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"

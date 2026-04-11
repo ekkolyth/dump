@@ -87,6 +87,9 @@ func installDesktopApp(binaryPath string) {
 		return
 	}
 
+	// Clean up old shortcut format
+	os.Remove(filepath.Join(home, "Desktop", "Dump.command"))
+
 	app := filepath.Join(home, "Desktop", "Dump.app")
 	contentsDir := filepath.Join(app, "Contents")
 	macosDir := filepath.Join(contentsDir, "MacOS")
