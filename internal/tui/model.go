@@ -513,16 +513,31 @@ func (m model) updateDestSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case components.DriveSelectedMsg:
-		if len(msg.Selected) > 0 {
-			destIdx := msg.Selected[0]
-			driveIdx := m.destIndexMap[destIdx]
-			mountPoint := m.allDrives[driveIdx].MountPoint
-			m.destPath = mountPoint
-			m.textInput = ""
-			m.step = stepClientInput
+	case components.ExtraItemSelectedMsg:
+		if msg.Label == "Continue Existing Folder" {
+			m.isContinueMode = true
 		}
 		return m, nil
+
+	case components.DriveSelectedMsg:
+		if len(msg.Selected) == 0 {
+			return m, nil
+		}
+		destIdx := msg.Selected[0]
+		driveIdx := m.destIndexMap[destIdx]
+		mountPoint := m.allDrives[driveIdx].MountPoint
+		m.destPath = mountPoint
+
+		if m.isContinueMode {
+			m.fileBrowser = components.NewFileBrowser(mountPoint)
+			m.step = stepContinueBrowse
+			return m, nil
+		}
+
+		m.textInput = ""
+		m.step = stepClientInput
+		return m, nil
+
 	default:
 		m.destList, cmd = m.destList.Update(msg)
 	}
