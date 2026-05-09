@@ -385,6 +385,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateResumeSelect(msg)
 	case stepCleanSelect:
 		return m.updateCleanSelect(msg)
+	case stepContinueBrowse:
+		return m.updateContinueBrowse(msg)
 	case stepTransfer:
 		return m.updateTransfer(msg)
 	}
@@ -540,6 +542,38 @@ func (m model) updateDestSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	default:
 		m.destList, cmd = m.destList.Update(msg)
+	}
+
+	return m, cmd
+}
+
+func (m model) updateContinueBrowse(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case components.FolderSelectedMsg:
+		m.continueFolder = filepath.Base(msg.Path)
+		m.destPath = filepath.Dir(msg.Path)
+		m.continueHighestCard = transfer.HighestCardNumber(msg.Path)
+
+		m.cardSummaries = nil
+		for i, src := range m.selectedSources {
+			files, _ := transfer.DiscoverMediaFiles(src.MountPoint)
+			var totalBytes int64
+			for _, f := range files {
+				totalBytes += f.Size
+			}
+			m.cardSummaries = append(m.cardSummaries, cardSummary{
+				Name:       fmt.Sprintf("CARD %d", m.continueHighestCard+i+1),
+				FileCount:  len(files),
+				TotalBytes: totalBytes,
+			})
+		}
+		m.step = stepConfirm
+		return m, nil
+
+	default:
+		m.fileBrowser, cmd = m.fileBrowser.Update(msg)
 	}
 
 	return m, cmd
