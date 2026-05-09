@@ -471,6 +471,7 @@ func (m model) updateSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.destIndexMap = append(m.destIndexMap, i)
 		}
 		m.destList = components.NewDriveList(destDrives, false)
+		m.destList.ExtraItems = []string{"Continue Existing Folder"}
 
 		m.step = stepDestSelect
 		return m, nil
