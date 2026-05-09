@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -61,4 +63,81 @@ func TestIntegration_DiscoverAndTransfer(t *testing.T) {
 	}
 
 	_ = lastProgress // progress may or may not fire for tiny files
+}
+
+func TestIntegration_ContinueExistingFolder(t *testing.T) {
+	// Two source cards, one already-populated dest folder containing CARD 1 & CARD 2.
+	srcDir1 := t.TempDir()
+	srcDir2 := t.TempDir()
+	for _, p := range []string{
+		filepath.Join(srcDir1, "DCIM", "100GOPRO"),
+		filepath.Join(srcDir2, "DCIM", "100GOPRO"),
+	} {
+		if err := os.MkdirAll(p, 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", p, err)
+		}
+	}
+
+	data := make([]byte, 512)
+	if err := os.WriteFile(filepath.Join(srcDir1, "DCIM", "100GOPRO", "GX01.MP4"), data, 0644); err != nil {
+		t.Fatalf("write src1: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir2, "DCIM", "100GOPRO", "GX02.MP4"), data, 0644); err != nil {
+		t.Fatalf("write src2: %v", err)
+	}
+
+	destDir := t.TempDir()
+	eventFolder := "26.05.08 - CLIENT - EVENT"
+	for _, n := range []string{"CARD 1", "CARD 2"} {
+		if err := os.MkdirAll(filepath.Join(destDir, eventFolder, n), 0755); err != nil {
+			t.Fatalf("mkdir existing %s: %v", n, err)
+		}
+	}
+
+	// The engine scans VolumesRoot for source/dest dump.json files. All t.TempDir()
+	// calls in a single test share the same parent, so point VolumesRoot at it.
+	origVolumesRoot := transfer.VolumesRoot
+	transfer.VolumesRoot = filepath.Dir(srcDir1)
+	t.Cleanup(func() { transfer.VolumesRoot = origVolumesRoot })
+
+	highest := transfer.HighestCardNumber(filepath.Join(destDir, eventFolder))
+	if highest != 2 {
+		t.Fatalf("HighestCardNumber = %d, want 2", highest)
+	}
+
+	cards := []transfer.CardSource{
+		{MountPoint: srcDir1, VolumeName: "src1", CardIndex: 0, FolderName: fmt.Sprintf("CARD %d", highest+1)},
+		{MountPoint: srcDir2, VolumeName: "src2", CardIndex: 1, FolderName: fmt.Sprintf("CARD %d", highest+2)},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	engine, err := transfer.NewEngine(ctx, cards, destDir, eventFolder, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		engine.Run()
+		close(done)
+	}()
+	for range engine.Events {
+		// drain
+	}
+	<-done
+
+	for _, n := range []string{"CARD 1", "CARD 2", "CARD 3", "CARD 4"} {
+		if _, err := os.Stat(filepath.Join(destDir, eventFolder, n)); err != nil {
+			t.Errorf("expected %s to exist: %v", n, err)
+		}
+	}
+	for _, p := range []string{
+		filepath.Join(destDir, eventFolder, "CARD 3", "DCIM", "100GOPRO", "GX01.MP4"),
+		filepath.Join(destDir, eventFolder, "CARD 4", "DCIM", "100GOPRO", "GX02.MP4"),
+	} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("expected %s to exist: %v", p, err)
+		}
+	}
 }
