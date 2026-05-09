@@ -400,13 +400,22 @@ func (m model) handleBack() (tea.Model, tea.Cmd) {
 	case stepSourceSelect:
 		return m, tea.Quit
 	case stepDestSelect:
+		if m.isContinueMode {
+			m.isContinueMode = false
+		}
 		m.step = stepSourceSelect
 	case stepClientInput:
 		m.step = stepDestSelect
 	case stepEventInput:
 		m.step = stepClientInput
 	case stepConfirm:
-		m.step = stepEventInput
+		if m.isContinueMode {
+			m.step = stepContinueBrowse
+		} else {
+			m.step = stepEventInput
+		}
+	case stepContinueBrowse:
+		m.step = stepDestSelect
 	case stepResumeSelect, stepCleanSelect:
 		m.step = stepSourceSelect
 	}
