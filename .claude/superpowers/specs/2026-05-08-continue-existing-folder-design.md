@@ -22,25 +22,25 @@ Add a wizard path that lets the user select an existing event folder on a destin
 
 ```
 stepSourceSelect
-   └─> stepDestSelect ──┬──[drive picked, continueMode=false]──> stepClientInput → stepEventInput → stepConfirm → stepTransfer
+   └─> stepDestSelect ──┬──[drive picked, isContinueMode=false]──> stepClientInput → stepEventInput → stepConfirm → stepTransfer
                         │
-                        ├──["Continue Existing Folder" extra item]──> sets continueMode=true, stays on stepDestSelect (re-rendered)
+                        ├──["Continue Existing Folder" extra item]──> sets isContinueMode=true, stays on stepDestSelect (re-rendered)
                         │
-                        └──[drive picked, continueMode=true]──> stepContinueBrowse → stepConfirm → stepTransfer
-                                                                  (pick event folder)
+                        └──[drive picked, isContinueMode=true]──> stepContinueBrowse → stepConfirm → stepTransfer
+                                                                    (pick event folder)
 ```
 
-The continue branch reuses `stepDestSelect`: the extra item flips `continueMode` to `true` without changing the step, so the user picks a destination drive on the same screen. Only one new step is added: `stepContinueBrowse`.
+The continue branch reuses `stepDestSelect`: the extra item flips `isContinueMode` to `true` without changing the step, so the user picks a destination drive on the same screen. Only one new step is added: `stepContinueBrowse`.
 
 ## Wizard step changes
 
 ### `stepDestSelect`
 
 - New `ExtraItems` entry on the dest drive list: `"Continue Existing Folder"`.
-- When the user selects this extra item, set `m.continueMode = true` and remain on `stepDestSelect`. The drive list re-renders with title indicating the user is now picking the destination drive *for the continue flow*. No flow change beyond the title — drive selection still triggers `DriveSelectedMsg`.
+- When the user selects this extra item, set `m.isContinueMode = true` and remain on `stepDestSelect`. The drive list re-renders with title indicating the user is now picking the destination drive *for the continue flow*. No flow change beyond the title — drive selection still triggers `DriveSelectedMsg`.
 - On `DriveSelectedMsg`:
-  - If `m.continueMode` is `false`: existing path (set `destPath`, advance to `stepClientInput`).
-  - If `m.continueMode` is `true`: set `destPath`, instantiate `FileBrowser` rooted at `destPath`, advance to `stepContinueBrowse`.
+  - If `m.isContinueMode` is `false`: existing path (set `destPath`, advance to `stepClientInput`).
+  - If `m.isContinueMode` is `true`: set `destPath`, instantiate `FileBrowser` rooted at `destPath`, advance to `stepContinueBrowse`.
 
 ### `stepContinueBrowse` (new)
 
@@ -50,21 +50,21 @@ The continue branch reuses `stepDestSelect`: the extra item flips `continueMode`
 - On `FolderSelectedMsg`:
   1. `m.continueFolder = filepath.Base(msg.Path)`
   2. `m.destPath = filepath.Dir(msg.Path)` (already equals dest mount point in normal usage; this preserves it if user ever drilled deeper)
-  3. Scan `msg.Path` for `CARD N` subdirectories. `m.continueStartCard = max(N)` across matches; `0` if none.
+  3. Scan `msg.Path` for `CARD N` subdirectories. `m.continueHighestCard = HighestCardNumber(msg.Path)`; `0` if none.
   4. Build `cardSummaries` (file count + bytes per source card) — same logic currently used at `tui/model.go:558-572`.
   5. `m.step = stepConfirm`.
 
 ### `stepConfirm`
 
-- Branches on `m.continueMode`:
+- Branches on `m.isContinueMode`:
   - **New dump (existing)**: title `Step 5 — Confirm Import`, header line `Event  YY.MM.DD - CLIENT - EVENT`, cards named `<eventFolder> - CARD 1`, `… - CARD 2`, …
-  - **Continue mode**: title `Continuing — Add Cards to Existing Folder`, header lines `Folder  <continueFolder>` and `Destination  <destPath>`, cards named `CARD <continueStartCard+1>`, `CARD <continueStartCard+2>`, … with the same per-card file count and total bytes display.
+  - **Continue mode**: title `Continuing — Add Cards to Existing Folder`, header lines `Folder  <continueFolder>` and `Destination  <destPath>`, cards named `CARD <continueHighestCard+1>`, `CARD <continueHighestCard+2>`, … with the same per-card file count and total bytes display.
 
 ### `startTransfer` continue branch
 
 ```go
 eventFolder := m.continueFolder
-startIdx := m.continueStartCard
+highest := m.continueHighestCard
 
 cards := make([]transfer.CardSource, len(m.selectedSources))
 for i, src := range m.selectedSources {
@@ -72,7 +72,7 @@ for i, src := range m.selectedSources {
         MountPoint: src.MountPoint,
         VolumeName: src.VolumeName,
         CardIndex:  i,
-        FolderName: fmt.Sprintf("CARD %d", startIdx+i+1),
+        FolderName: fmt.Sprintf("CARD %d", highest+i+1),
     }
 }
 
@@ -81,39 +81,41 @@ engine, err := transfer.NewEngine(ctx, cards, m.destPath, eventFolder, ...)
 
 The existing `startTransfer` path applies in normal mode unchanged.
 
-## Card index scan
+## Card number scan
 
-Helper added to the `transfer` package (or kept inline in `tui/model.go` if small enough):
+Helper added to the `transfer` package:
 
 ```go
-// MaxCardIndex scans dir for entries matching ^CARD (\d+)$ and returns the
-// highest N found. Returns 0 if none.
-func MaxCardIndex(dir string) int
+// 0 if none
+func HighestCardNumber(dir string) int
 ```
 
 - Uses `os.ReadDir`.
 - Match regex: `^CARD (\d+)$` (case-sensitive — matches the format engine writes).
 - Skips non-directories.
 - Returns 0 on read error or empty match set (caller starts numbering at 1).
+- Named `HighestCardNumber` (not `MaxCardIndex`) to avoid confusion with the engine's 0-based `CardIndex` — folder numbers are 1-based.
 
 ## State additions to `model`
 
 ```go
 type model struct {
     ...
-    continueMode      bool   // true when user is in the Continue Existing Folder path
-    continueFolder    string // basename of selected event folder
-    continueStartCard int    // max CARD N found in selected folder
-    fileBrowser       components.FileBrowserModel
+    isContinueMode      bool
+    continueFolder      string
+    continueHighestCard int
+    fileBrowser         components.FileBrowserModel
     ...
 }
 ```
 
+Per `.claude/rules/golang/naming-conventions.md`, the boolean uses an `is` prefix; per `.claude/rules/comment-style.md`, no doc comments are written for these fields — names carry the meaning.
+
 `handleBack` gains:
 - `case stepContinueBrowse:` → return to `stepDestSelect`.
-- On `stepDestSelect` while `continueMode` is true: `esc` clears `continueMode` and returns to `stepSourceSelect` (so user can exit the continue branch entirely).
+- On `stepDestSelect` while `isContinueMode` is true: `esc` clears `isContinueMode` and returns to `stepSourceSelect` (so user can exit the continue branch entirely).
 
-`resetToMainMenu` clears `continueMode`, `continueFolder`, `continueStartCard`, and `fileBrowser`.
+`resetToMainMenu` clears `isContinueMode`, `continueFolder`, `continueHighestCard`, and `fileBrowser`.
 
 ## Engine, sessions, metadata
 
@@ -127,24 +129,24 @@ No changes to the transfer engine, `dump.json`, or `dump-progress.json` formats.
 ## UI / View changes
 
 - `tui/model.go` `View()` adds a `case stepContinueBrowse:` rendering the file browser with a header title (e.g. `Continue — Select Existing Event Folder`) and the browser's own help line.
-- `stepConfirm` view branches on `continueMode` to render the alternate header and box content described above.
-- `stepDestSelect` view: when `continueMode` is true, change the title from `Step 2 — Select Destination Drive` to `Continue — Select Destination Drive`. Otherwise unchanged.
+- `stepConfirm` view branches on `isContinueMode` to render the alternate header and box content described above.
+- `stepDestSelect` view: when `isContinueMode` is true, change the title from `Step 2 — Select Destination Drive` to `Continue — Select Destination Drive`. Otherwise unchanged.
 
 ## Edge cases
 
-- **Empty folder picked** (no `CARD N` subdirs): `continueStartCard = 0`, new cards numbered from `CARD 1`. Functionally equivalent to dumping into a pre-created empty folder.
+- **Empty folder picked** (no `CARD N` subdirs): `continueHighestCard = 0`, new cards numbered from `CARD 1`. Functionally equivalent to dumping into a pre-created empty folder.
 - **Non-event folder picked** (e.g. user navigates into `Documents`): same as empty folder — starts at `CARD 1`. No special protection. The user is choosing the folder; trust the user.
 - **`CARD <very large N>` already present**: Go's `int` handles it; folder name is just a string.
 - **Dest drive disappears mid-transfer**: existing reconnection logic in the engine applies unchanged.
-- **Continue-mode `esc` from `stepContinueBrowse`**: returns to `stepDestSelect` with `continueMode` still true, letting user pick a different drive.
-- **Continue-mode `esc` from `stepDestSelect`** (continue path): clears `continueMode`, returns to `stepSourceSelect`.
+- **Continue-mode `esc` from `stepContinueBrowse`**: returns to `stepDestSelect` with `isContinueMode` still true, letting user pick a different drive.
+- **Continue-mode `esc` from `stepDestSelect`** (continue path): clears `isContinueMode`, returns to `stepSourceSelect`.
 
 ## Files touched
 
 - `internal/tui/model.go` — wizard state, new step, view branches, start-transfer branch.
-- `internal/transfer/` — add `MaxCardIndex` helper (file: `cards.go` or extend `discovery.go`).
+- `internal/transfer/cards.go` (new) — `HighestCardNumber` helper.
+- `internal/transfer/cards_test.go` (new) — covers `HighestCardNumber` against synthetic dirs (empty, single, multiple, gaps, non-matching names, `CARD 1` vs `CARD 10` ordering, read error).
 - `internal/components/filebrowser.go` — no change; consumed as-is.
-- Tests: `internal/transfer/cards_test.go` covering `MaxCardIndex` against synthetic dirs (empty, single, multiple, gaps, non-matching names, `CARD 1` vs `CARD 10` ordering).
 
 ## Out of scope (future work, if requested)
 
