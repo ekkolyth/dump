@@ -1,6 +1,11 @@
 package transfer
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
 
 func TestParseProgressLine(t *testing.T) {
 	tests := []struct {
@@ -66,6 +71,43 @@ func TestParseProgressLine(t *testing.T) {
 				t.Errorf("IsFinal = %v, want %v", p.IsFinal, tt.wantFin)
 			}
 		})
+	}
+}
+
+func TestRsyncFile_PreservesMtime(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	srcFile := filepath.Join(srcDir, "GX010001.MP4")
+	if err := os.WriteFile(srcFile, []byte("test data"), 0644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+
+	// Simulate a file written by a camera ~2 years ago.
+	want := time.Date(2024, 5, 8, 14, 30, 0, 0, time.UTC)
+	if err := os.Chtimes(srcFile, want, want); err != nil {
+		t.Fatalf("chtimes src: %v", err)
+	}
+
+	dstFile := filepath.Join(dstDir, "GX010001.MP4")
+	if err := RsyncFile(srcFile, dstFile, nil); err != nil {
+		t.Fatalf("RsyncFile: %v", err)
+	}
+
+	info, err := os.Stat(dstFile)
+	if err != nil {
+		t.Fatalf("stat dst: %v", err)
+	}
+
+	got := info.ModTime().UTC()
+	// rsync truncates to whole seconds; allow up to 1s slack.
+	diff := got.Sub(want)
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > time.Second {
+		t.Errorf("dst mtime = %v, want %v (diff %v) — rsync did not preserve source mtime",
+			got, want, diff)
 	}
 }
 

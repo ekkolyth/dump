@@ -73,6 +73,11 @@ func RsyncFile(src, dst string, onProgress func(Progress)) error {
 		"--progress",
 		"--append",
 		"--inplace",
+		// Preserve source mtime so dumped media keeps the camera's capture
+		// timestamp instead of being stamped with the copy time. On macOS APFS
+		// destinations, setting an earlier mtime also lowers the file's
+		// birthtime, so Finder "Date Created" reflects the original too.
+		"--times",
 		src,
 		dst,
 	}

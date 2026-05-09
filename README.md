@@ -13,7 +13,7 @@ Supports macOS and Linux. Requires `rsync`.
 ## Install
 
 ```bash
-curl -fsSL https://kenway.me/install/dump | bash
+curl -fsSL https://ekkolyth.com/install/dump | bash
 ```
 
 ## Usage
