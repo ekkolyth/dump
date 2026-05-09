@@ -989,7 +989,7 @@ func (m model) View() string {
 		b.WriteString(m.destList.View())
 
 	case stepContinueBrowse:
-		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("space: open folder | enter: select this folder | esc: go up"))
+		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("space: open folder | enter: select this folder | esc: cancel"))
 		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("Continue — Select Existing Event Folder"))
 		b.WriteString("\n")
