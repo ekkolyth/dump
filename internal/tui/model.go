@@ -335,6 +335,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.dashboard.SetSize(msg.Width, msg.Height)
+		m.fileBrowser, _ = m.fileBrowser.Update(msg)
 
 	case tea.KeyMsg:
 		switch msg.String() {
