@@ -111,6 +111,59 @@ func TestRsyncFile_PreservesMtime(t *testing.T) {
 	}
 }
 
+func TestRsyncFile_PreservesMtimeOnAppend(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	// 64KB so rsync actually has work to do; --append resumes from dst length.
+	srcData := make([]byte, 64*1024)
+	for i := range srcData {
+		srcData[i] = byte(i % 256)
+	}
+	srcFile := filepath.Join(srcDir, "GX010001.MP4")
+	if err := os.WriteFile(srcFile, srcData, 0644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+
+	want := time.Date(2024, 5, 8, 14, 30, 0, 0, time.UTC)
+	if err := os.Chtimes(srcFile, want, want); err != nil {
+		t.Fatalf("chtimes src: %v", err)
+	}
+
+	// Pre-seed dst with a partial copy to simulate an interrupted transfer.
+	dstFile := filepath.Join(dstDir, "GX010001.MP4")
+	if err := os.WriteFile(dstFile, srcData[:16*1024], 0644); err != nil {
+		t.Fatalf("seed dst: %v", err)
+	}
+	// Stamp the partial with a different time so we can tell if --times wins.
+	stale := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(dstFile, stale, stale); err != nil {
+		t.Fatalf("chtimes dst: %v", err)
+	}
+
+	if err := RsyncFile(srcFile, dstFile, nil); err != nil {
+		t.Fatalf("RsyncFile: %v", err)
+	}
+
+	info, err := os.Stat(dstFile)
+	if err != nil {
+		t.Fatalf("stat dst: %v", err)
+	}
+	if info.Size() != int64(len(srcData)) {
+		t.Fatalf("dst size = %d, want %d", info.Size(), len(srcData))
+	}
+
+	got := info.ModTime().UTC()
+	diff := got.Sub(want)
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > time.Second {
+		t.Errorf("dst mtime = %v, want %v (diff %v) — --times did not apply on --append resume",
+			got, want, diff)
+	}
+}
+
 func TestScanCRLF(t *testing.T) {
 	data := []byte("line1\rline2\nline3\r")
 
