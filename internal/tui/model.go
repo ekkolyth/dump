@@ -974,10 +974,21 @@ func (m model) View() string {
 		b.WriteString("\n\n")
 		b.WriteString(m.destList.View())
 
+	case stepContinueBrowse:
+		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("space: open folder | enter: select this folder | esc: go up"))
+		b.WriteString("\n\n")
+		b.WriteString(titleStyle.Render("Continue — Select Existing Event Folder"))
+		b.WriteString("\n")
+		b.WriteString(m.fileBrowser.View())
+
 	case stepDestSelect:
 		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("space: select | enter: confirm | esc: back"))
 		b.WriteString("\n\n")
-		b.WriteString(titleStyle.Render("Step 2 — Select Destination Drive"))
+		if m.isContinueMode {
+			b.WriteString(titleStyle.Render("Continue — Select Destination Drive"))
+		} else {
+			b.WriteString(titleStyle.Render("Step 2 — Select Destination Drive"))
+		}
 		b.WriteString("\n")
 		b.WriteString(m.destList.View())
 
@@ -1000,7 +1011,11 @@ func (m model) View() string {
 	case stepConfirm:
 		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("enter: start import | esc: back"))
 		b.WriteString("\n\n")
-		b.WriteString(titleStyle.Render("Step 5 — Confirm Import"))
+		if m.isContinueMode {
+			b.WriteString(titleStyle.Render("Continuing — Add Cards to Existing Folder"))
+		} else {
+			b.WriteString(titleStyle.Render("Step 5 — Confirm Import"))
+		}
 		b.WriteString("\n")
 
 		boxStyle := lipgloss.NewStyle().
@@ -1018,9 +1033,15 @@ func (m model) View() string {
 
 		var content strings.Builder
 
-		now := time.Now()
-		eventFolder := fmt.Sprintf("%s - %s - %s", now.Format("06.01.02"), m.clientName, m.eventName)
-		content.WriteString(labelStyle.Render("Event") + "      " + valueStyle.Render(eventFolder) + "\n")
+		var eventFolder string
+		if m.isContinueMode {
+			eventFolder = m.continueFolder
+			content.WriteString(labelStyle.Render("Folder") + "       " + valueStyle.Render(eventFolder) + "\n")
+		} else {
+			now := time.Now()
+			eventFolder = fmt.Sprintf("%s - %s - %s", now.Format("06.01.02"), m.clientName, m.eventName)
+			content.WriteString(labelStyle.Render("Event") + "        " + valueStyle.Render(eventFolder) + "\n")
+		}
 		content.WriteString(labelStyle.Render("Destination") + "  " + valueStyle.Render(m.destPath) + "\n")
 
 		content.WriteString("\n")
