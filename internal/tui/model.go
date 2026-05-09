@@ -845,6 +845,10 @@ func (m model) resetToMainMenu() (tea.Model, tea.Cmd) {
 	m.cancelEngine = nil
 	m.sessionID = ""
 	m.step = stepSourceSelect
+	m.isContinueMode = false
+	m.continueFolder = ""
+	m.continueHighestCard = 0
+	m.fileBrowser = components.FileBrowserModel{}
 	return m, nil
 }
 
