@@ -28,6 +28,7 @@ const (
 	stepConfirm
 	stepResumeSelect
 	stepCleanSelect
+	stepContinueBrowse
 	stepTransfer
 )
 
@@ -47,6 +48,12 @@ type model struct {
 	destList     components.DriveListModel
 	destIndexMap []int // maps dest list indices back to allDrives indices
 	destPath     string
+
+	// Continue Existing Folder flow
+	isContinueMode      bool
+	continueFolder      string
+	continueHighestCard int
+	fileBrowser         components.FileBrowserModel
 
 	// Step 3-4: Client and event name input
 	clientName string
