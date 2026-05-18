@@ -149,9 +149,11 @@ func (m DriveListModel) View() string {
 		b.WriteString("\n")
 	}
 
+	if len(m.ExtraItems) > 0 {
+		b.WriteString("\n")
+	}
 	for i, label := range m.ExtraItems {
 		idx := len(m.Drives) + i
-		b.WriteString("\n")
 		cursor := "  "
 		if idx == m.cursor {
 			cursor = "> "
