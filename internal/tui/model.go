@@ -137,7 +137,7 @@ func InitialModel() model {
 
 func (m model) renderLoadingScreen(message string) string {
 	header := titleInline.Render("Dump v" + version.Version)
-	content := header + "\n\n" + confirmKey.Render(message) + "\n" + m.spinner.View()
+	content := header + "\n\n" + confirmKey.Render(message) + "\n\n" + m.spinner.View()
 
 	if m.width <= 2 || m.height <= 2 {
 		return content
