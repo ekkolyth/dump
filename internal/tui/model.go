@@ -910,6 +910,10 @@ func (m model) resetToMainMenu() (tea.Model, tea.Cmd) {
 	m.cancelEngine = nil
 	m.sessionID = ""
 	m.step = stepSourceSelect
+	m.isContinuing = false
+	m.continueDestBase = ""
+	m.continueEvent = ""
+	m.continueSourceIndexMap = nil
 	return m, nil
 }
 
