@@ -729,11 +729,21 @@ func (m *model) deleteSourceCards() {
 
 func (m model) handlePostDoneChoice() (tea.Model, tea.Cmd) {
 	switch m.dashboard.PostCursor {
+	case components.PostDoneContinueDump:
+		m.continueDestBase = m.engine.DestBase
+		m.continueEvent = m.engine.EventFolder
+		m.isContinuing = true
+		m.engine = nil
+		m.cancelEngine = nil
+		m.status = ""
+		m.step = stepContinueSwap
+		return m, nil
 	case components.PostDoneDeleteCards:
+		m.status = "Deleting cards..."
 		m.deleteSourceCards()
 		m.status = fmt.Sprintf("Deleted files from %d card(s)", len(m.engine.Cards))
-		// Re-discover drives and go back to main menu
-		return m.resetToMainMenu()
+		m.dashboard.PostCursor = components.PostDoneContinueDump
+		return m, nil
 	case components.PostDoneDeleteAndExit:
 		m.deleteSourceCards()
 		return m, tea.Quit
