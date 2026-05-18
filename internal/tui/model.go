@@ -28,7 +28,6 @@ const (
 	stepConfirm
 	stepResumeSelect
 	stepCleanSelect
-	stepContinueBrowse
 	stepTransfer
 )
 
@@ -48,12 +47,6 @@ type model struct {
 	destList     components.DriveListModel
 	destIndexMap []int // maps dest list indices back to allDrives indices
 	destPath     string
-
-	// Continue Existing Folder flow
-	isContinueMode      bool
-	continueFolder      string
-	continueHighestCard int
-	fileBrowser         components.FileBrowserModel
 
 	// Step 3-4: Client and event name input
 	clientName string
@@ -335,7 +328,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.dashboard.SetSize(msg.Width, msg.Height)
-		m.fileBrowser, _ = m.fileBrowser.Update(msg)
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -386,8 +378,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateResumeSelect(msg)
 	case stepCleanSelect:
 		return m.updateCleanSelect(msg)
-	case stepContinueBrowse:
-		return m.updateContinueBrowse(msg)
 	case stepTransfer:
 		return m.updateTransfer(msg)
 	}
@@ -400,22 +390,13 @@ func (m model) handleBack() (tea.Model, tea.Cmd) {
 	case stepSourceSelect:
 		return m, tea.Quit
 	case stepDestSelect:
-		if m.isContinueMode {
-			m.isContinueMode = false
-		}
 		m.step = stepSourceSelect
 	case stepClientInput:
 		m.step = stepDestSelect
 	case stepEventInput:
 		m.step = stepClientInput
 	case stepConfirm:
-		if m.isContinueMode {
-			m.step = stepContinueBrowse
-		} else {
-			m.step = stepEventInput
-		}
-	case stepContinueBrowse:
-		m.step = stepDestSelect
+		m.step = stepEventInput
 	case stepResumeSelect, stepCleanSelect:
 		m.step = stepSourceSelect
 	}
@@ -483,7 +464,6 @@ func (m model) updateSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.destIndexMap = append(m.destIndexMap, i)
 		}
 		m.destList = components.NewDriveList(destDrives, false)
-		m.destList.ExtraItems = []string{"Continue Existing Folder"}
 
 		m.step = stepDestSelect
 		return m, nil
@@ -525,65 +505,18 @@ func (m model) updateDestSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case components.ExtraItemSelectedMsg:
-		if msg.Label == "Continue Existing Folder" {
-			m.isContinueMode = true
-		}
-		return m, nil
-
 	case components.DriveSelectedMsg:
-		if len(msg.Selected) == 0 {
-			return m, nil
+		if len(msg.Selected) > 0 {
+			destIdx := msg.Selected[0]
+			driveIdx := m.destIndexMap[destIdx]
+			mountPoint := m.allDrives[driveIdx].MountPoint
+			m.destPath = mountPoint
+			m.textInput = ""
+			m.step = stepClientInput
 		}
-		destIdx := msg.Selected[0]
-		driveIdx := m.destIndexMap[destIdx]
-		mountPoint := m.allDrives[driveIdx].MountPoint
-		m.destPath = mountPoint
-
-		if m.isContinueMode {
-			m.fileBrowser = components.NewFileBrowser(mountPoint)
-			m.step = stepContinueBrowse
-			return m, nil
-		}
-
-		m.textInput = ""
-		m.step = stepClientInput
 		return m, nil
-
 	default:
 		m.destList, cmd = m.destList.Update(msg)
-	}
-
-	return m, cmd
-}
-
-func (m model) updateContinueBrowse(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case components.FolderSelectedMsg:
-		m.continueFolder = filepath.Base(msg.Path)
-		m.destPath = filepath.Dir(msg.Path)
-		m.continueHighestCard = transfer.HighestCardNumber(msg.Path)
-
-		m.cardSummaries = nil
-		for i, src := range m.selectedSources {
-			files, _ := transfer.DiscoverMediaFiles(src.MountPoint)
-			var totalBytes int64
-			for _, f := range files {
-				totalBytes += f.Size
-			}
-			m.cardSummaries = append(m.cardSummaries, cardSummary{
-				Name:       fmt.Sprintf("CARD %d", m.continueHighestCard+i+1),
-				FileCount:  len(files),
-				TotalBytes: totalBytes,
-			})
-		}
-		m.step = stepConfirm
-		return m, nil
-
-	default:
-		m.fileBrowser, cmd = m.fileBrowser.Update(msg)
 	}
 
 	return m, cmd
@@ -663,29 +596,16 @@ func (m model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) startTransfer() (tea.Model, tea.Cmd) {
-	var eventFolder string
-	cards := make([]transfer.CardSource, len(m.selectedSources))
+	now := time.Now()
+	eventFolder := fmt.Sprintf("%s - %s - %s", now.Format("06.01.02"), m.clientName, m.eventName)
 
-	if m.isContinueMode {
-		eventFolder = m.continueFolder
-		for i, src := range m.selectedSources {
-			cards[i] = transfer.CardSource{
-				MountPoint: src.MountPoint,
-				VolumeName: src.VolumeName,
-				CardIndex:  i,
-				FolderName: fmt.Sprintf("CARD %d", m.continueHighestCard+i+1),
-			}
-		}
-	} else {
-		now := time.Now()
-		eventFolder = fmt.Sprintf("%s - %s - %s", now.Format("06.01.02"), m.clientName, m.eventName)
-		for i, src := range m.selectedSources {
-			cards[i] = transfer.CardSource{
-				MountPoint: src.MountPoint,
-				VolumeName: src.VolumeName,
-				CardIndex:  i,
-				FolderName: fmt.Sprintf("CARD %d", i+1),
-			}
+	cards := make([]transfer.CardSource, len(m.selectedSources))
+	for i, src := range m.selectedSources {
+		cards[i] = transfer.CardSource{
+			MountPoint: src.MountPoint,
+			VolumeName: src.VolumeName,
+			CardIndex:  i,
+			FolderName: fmt.Sprintf("CARD %d", i+1),
 		}
 	}
 
@@ -845,10 +765,6 @@ func (m model) resetToMainMenu() (tea.Model, tea.Cmd) {
 	m.cancelEngine = nil
 	m.sessionID = ""
 	m.step = stepSourceSelect
-	m.isContinueMode = false
-	m.continueFolder = ""
-	m.continueHighestCard = 0
-	m.fileBrowser = components.FileBrowserModel{}
 	return m, nil
 }
 
@@ -988,21 +904,10 @@ func (m model) View() string {
 		b.WriteString("\n\n")
 		b.WriteString(m.destList.View())
 
-	case stepContinueBrowse:
-		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("space: open folder | enter: select this folder | esc: cancel"))
-		b.WriteString("\n\n")
-		b.WriteString(titleStyle.Render("Continue — Select Existing Event Folder"))
-		b.WriteString("\n")
-		b.WriteString(m.fileBrowser.View())
-
 	case stepDestSelect:
 		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("space: select | enter: confirm | esc: back"))
 		b.WriteString("\n\n")
-		if m.isContinueMode {
-			b.WriteString(titleStyle.Render("Continue — Select Destination Drive"))
-		} else {
-			b.WriteString(titleStyle.Render("Step 2 — Select Destination Drive"))
-		}
+		b.WriteString(titleStyle.Render("Step 2 — Select Destination Drive"))
 		b.WriteString("\n")
 		b.WriteString(m.destList.View())
 
@@ -1025,11 +930,7 @@ func (m model) View() string {
 	case stepConfirm:
 		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("enter: start import | esc: back"))
 		b.WriteString("\n\n")
-		if m.isContinueMode {
-			b.WriteString(titleStyle.Render("Continuing — Add Cards to Existing Folder"))
-		} else {
-			b.WriteString(titleStyle.Render("Step 5 — Confirm Import"))
-		}
+		b.WriteString(titleStyle.Render("Step 5 — Confirm Import"))
 		b.WriteString("\n")
 
 		boxStyle := lipgloss.NewStyle().
@@ -1047,15 +948,9 @@ func (m model) View() string {
 
 		var content strings.Builder
 
-		var eventFolder string
-		if m.isContinueMode {
-			eventFolder = m.continueFolder
-			content.WriteString(labelStyle.Render("Folder") + "       " + valueStyle.Render(eventFolder) + "\n")
-		} else {
-			now := time.Now()
-			eventFolder = fmt.Sprintf("%s - %s - %s", now.Format("06.01.02"), m.clientName, m.eventName)
-			content.WriteString(labelStyle.Render("Event") + "        " + valueStyle.Render(eventFolder) + "\n")
-		}
+		now := time.Now()
+		eventFolder := fmt.Sprintf("%s - %s - %s", now.Format("06.01.02"), m.clientName, m.eventName)
+		content.WriteString(labelStyle.Render("Event") + "        " + valueStyle.Render(eventFolder) + "\n")
 		content.WriteString(labelStyle.Render("Destination") + "  " + valueStyle.Render(m.destPath) + "\n")
 
 		content.WriteString("\n")
