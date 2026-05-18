@@ -141,3 +141,122 @@ func TestIntegration_ContinueExistingFolder(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegration_ContinueCurrentDump(t *testing.T) {
+	// Round 1: two source cards into a fresh event folder.
+	src1Round1 := t.TempDir()
+	src2Round1 := t.TempDir()
+	for _, p := range []string{
+		filepath.Join(src1Round1, "DCIM", "100GOPRO"),
+		filepath.Join(src2Round1, "DCIM", "100GOPRO"),
+	} {
+		if err := os.MkdirAll(p, 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", p, err)
+		}
+	}
+	data := make([]byte, 256)
+	if err := os.WriteFile(filepath.Join(src1Round1, "DCIM", "100GOPRO", "GX01.MP4"), data, 0644); err != nil {
+		t.Fatalf("write src1Round1: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src2Round1, "DCIM", "100GOPRO", "GX02.MP4"), data, 0644); err != nil {
+		t.Fatalf("write src2Round1: %v", err)
+	}
+
+	destDir := t.TempDir()
+	eventFolder := "26.05.08 - CLIENT - EVENT"
+
+	origVolumesRoot := transfer.VolumesRoot
+	transfer.VolumesRoot = filepath.Dir(src1Round1)
+	t.Cleanup(func() { transfer.VolumesRoot = origVolumesRoot })
+
+	round1Cards := []transfer.CardSource{
+		{MountPoint: src1Round1, VolumeName: "r1c1", CardIndex: 0, FolderName: "CARD 1"},
+		{MountPoint: src2Round1, VolumeName: "r1c2", CardIndex: 1, FolderName: "CARD 2"},
+	}
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	defer cancel1()
+	engine1, err := transfer.NewEngine(ctx1, round1Cards, destDir, eventFolder, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
+	if err != nil {
+		t.Fatalf("NewEngine round 1: %v", err)
+	}
+	done1 := make(chan struct{})
+	go func() {
+		engine1.Run()
+		close(done1)
+	}()
+	for range engine1.Events {
+	}
+	<-done1
+
+	// Remove metadata as the real handler does on EventAllComplete.
+	for _, card := range engine1.Cards {
+		transfer.RemoveDumpMetadata(card.MountPoint)
+	}
+	transfer.RemoveDumpMetadata(destDir)
+	transfer.RemoveProgressFile(destDir)
+
+	// Verify round 1 outputs.
+	for _, n := range []string{"CARD 1", "CARD 2"} {
+		if _, err := os.Stat(filepath.Join(destDir, eventFolder, n)); err != nil {
+			t.Fatalf("round 1: expected %s: %v", n, err)
+		}
+	}
+
+	// Round 2: two NEW source cards continue into the same event folder.
+	src1Round2 := t.TempDir()
+	src2Round2 := t.TempDir()
+	for _, p := range []string{
+		filepath.Join(src1Round2, "DCIM", "100GOPRO"),
+		filepath.Join(src2Round2, "DCIM", "100GOPRO"),
+	} {
+		if err := os.MkdirAll(p, 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", p, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(src1Round2, "DCIM", "100GOPRO", "GX03.MP4"), data, 0644); err != nil {
+		t.Fatalf("write src1Round2: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src2Round2, "DCIM", "100GOPRO", "GX04.MP4"), data, 0644); err != nil {
+		t.Fatalf("write src2Round2: %v", err)
+	}
+
+	highest := transfer.HighestCardNumber(filepath.Join(destDir, eventFolder))
+	if highest != 2 {
+		t.Fatalf("HighestCardNumber after round 1 = %d, want 2", highest)
+	}
+
+	round2Cards := []transfer.CardSource{
+		{MountPoint: src1Round2, VolumeName: "r2c1", CardIndex: 0, FolderName: fmt.Sprintf("CARD %d", highest+1)},
+		{MountPoint: src2Round2, VolumeName: "r2c2", CardIndex: 1, FolderName: fmt.Sprintf("CARD %d", highest+2)},
+	}
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	engine2, err := transfer.NewEngine(ctx2, round2Cards, destDir, eventFolder, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
+	if err != nil {
+		t.Fatalf("NewEngine round 2: %v", err)
+	}
+	done2 := make(chan struct{})
+	go func() {
+		engine2.Run()
+		close(done2)
+	}()
+	for range engine2.Events {
+	}
+	<-done2
+
+	for _, n := range []string{"CARD 1", "CARD 2", "CARD 3", "CARD 4"} {
+		if _, err := os.Stat(filepath.Join(destDir, eventFolder, n)); err != nil {
+			t.Errorf("round 2: expected %s to exist: %v", n, err)
+		}
+	}
+	for _, p := range []string{
+		filepath.Join(destDir, eventFolder, "CARD 1", "DCIM", "100GOPRO", "GX01.MP4"),
+		filepath.Join(destDir, eventFolder, "CARD 2", "DCIM", "100GOPRO", "GX02.MP4"),
+		filepath.Join(destDir, eventFolder, "CARD 3", "DCIM", "100GOPRO", "GX03.MP4"),
+		filepath.Join(destDir, eventFolder, "CARD 4", "DCIM", "100GOPRO", "GX04.MP4"),
+	} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("round 2: expected %s to exist: %v", p, err)
+		}
+	}
+}
