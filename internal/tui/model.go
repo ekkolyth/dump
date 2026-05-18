@@ -96,8 +96,8 @@ var (
 	helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MarginTop(1)
 	helpInline    = lipgloss.NewStyle().Foreground(lipgloss.Color("243")).Faint(true)
 	errStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94"))
-	confirmKey = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AD8CFF"))
-	loadingBox = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#FF6AD5")).Padding(2, 6)
+	confirmKey  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AD8CFF"))
+	loadingBorder = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#FF6AD5"))
 )
 
 type initialDrivesDiscoveredMsg struct {
@@ -113,11 +113,16 @@ func (m model) renderLoadingScreen(message string) string {
 	header := titleInline.Render("Dump v" + version.Version)
 	body := confirmKey.Render(message)
 	content := header + "\n\n" + body
-	box := loadingBox.Render(content)
-	if m.width > 0 && m.height > 0 {
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+
+	if m.width <= 2 || m.height <= 2 {
+		return content
 	}
-	return box
+
+	return loadingBorder.
+		Width(m.width - 2).
+		Height(m.height - 2).
+		Align(lipgloss.Center, lipgloss.Center).
+		Render(content)
 }
 
 // WantsUpgrade returns true if the user selected "Update Dump" from the menu.
