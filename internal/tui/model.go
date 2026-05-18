@@ -51,7 +51,6 @@ type model struct {
 	destPath     string
 
 	// Continue Current Dump flow
-	isContinuing           bool
 	continueDestBase       string
 	continueEvent          string
 	continueSourceIndexMap []int
@@ -410,10 +409,6 @@ func (m model) handleBack() (tea.Model, tea.Cmd) {
 	case stepConfirm:
 		m.step = stepEventInput
 	case stepContinueSwap:
-		m.isContinuing = false
-		m.continueDestBase = ""
-		m.continueEvent = ""
-		m.continueSourceIndexMap = nil
 		return m.resetToMainMenu()
 	case stepContinueSourceSelect:
 		m.step = stepContinueSwap
@@ -859,7 +854,6 @@ func (m model) handlePostDoneChoice() (tea.Model, tea.Cmd) {
 	case components.PostDoneContinueDump:
 		m.continueDestBase = m.engine.DestBase
 		m.continueEvent = m.engine.EventFolder
-		m.isContinuing = true
 		m.engine = nil
 		m.cancelEngine = nil
 		m.status = ""
@@ -910,7 +904,7 @@ func (m model) resetToMainMenu() (tea.Model, tea.Cmd) {
 	m.cancelEngine = nil
 	m.sessionID = ""
 	m.step = stepSourceSelect
-	m.isContinuing = false
+	m.status = ""
 	m.continueDestBase = ""
 	m.continueEvent = ""
 	m.continueSourceIndexMap = nil
