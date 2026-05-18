@@ -150,7 +150,8 @@ var (
 	logRetryStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#E8A0BF"))
 	logFailStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94"))
 	logWarnStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94"))
-	summaryStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5")).MarginTop(1)
+	summaryStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5")).MarginTop(1)
+	postDoneSelected = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6AD5"))
 )
 
 func (m DashboardModel) View() string {
@@ -303,12 +304,10 @@ func (m DashboardModel) View() string {
 			"Back to Main Menu",
 		}
 		for i, opt := range options {
-			cursor := "  "
 			if PostDoneChoice(i) == m.PostCursor {
-				cursor = summaryStyle.Render("> ")
-				b.WriteString(cursor + summaryStyle.Render(opt) + "\n")
+				b.WriteString(postDoneSelected.Render("> "+opt) + "\n")
 			} else {
-				b.WriteString(cursor + opt + "\n")
+				b.WriteString("  " + opt + "\n")
 			}
 		}
 	}
