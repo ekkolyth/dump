@@ -530,6 +530,44 @@ func (m model) updateDestSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m model) updateContinueSwap(msg tea.Msg) (tea.Model, tea.Cmd) {
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	if key.String() != "enter" {
+		return m, nil
+	}
+
+	drives, err := driveutil.DiscoverDrives()
+	if err != nil {
+		m.err = fmt.Sprintf("Failed to discover drives: %v", err)
+		return m, nil
+	}
+
+	var driveInfos []components.DriveInfo
+	m.continueSourceIndexMap = nil
+	for i, d := range drives {
+		if d.MountPoint == m.continueDestBase {
+			continue
+		}
+		driveInfos = append(driveInfos, components.DriveInfo{
+			VolumeName:     d.VolumeName,
+			MountPoint:     d.MountPoint,
+			DeviceID:       d.DeviceIdentifier,
+			TotalSize:      driveutil.FormatSize(d.TotalSize),
+			FreeSpace:      driveutil.FormatSize(d.EffectiveFreeSpace()),
+			FilesystemName: d.FilesystemName,
+			IsExternal:     d.IsExternal(),
+			IsNetwork:      d.IsNetwork,
+		})
+		m.continueSourceIndexMap = append(m.continueSourceIndexMap, i)
+	}
+	m.allDrives = drives
+	m.sourceList = components.NewDriveList(driveInfos, true)
+	m.step = stepContinueSourceSelect
+	return m, nil
+}
 
 func (m model) updateClientInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
