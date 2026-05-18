@@ -82,7 +82,7 @@ func (m DriveListModel) Update(msg tea.Msg) (DriveListModel, tea.Cmd) {
 				}
 			}
 		case "enter":
-			if m.cursor >= len(m.Drives) {
+			if m.cursor >= len(m.Drives) && len(m.ExtraItems) > 0 {
 				extraIdx := m.cursor - len(m.Drives)
 				label := m.ExtraItems[extraIdx]
 				return m, func() tea.Msg { return ExtraItemSelectedMsg{Label: label} }
