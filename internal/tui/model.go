@@ -386,6 +386,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateResumeSelect(msg)
 	case stepCleanSelect:
 		return m.updateCleanSelect(msg)
+	case stepContinueSwap:
+		return m.updateContinueSwap(msg)
+	case stepContinueSourceSelect:
+		return m.updateContinueSourceSelect(msg)
 	case stepTransfer:
 		return m.updateTransfer(msg)
 	}
