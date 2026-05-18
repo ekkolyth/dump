@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,6 +15,7 @@ import (
 	"github.com/ekkolyth/dump/internal/transfer"
 	"github.com/ekkolyth/dump/internal/version"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -56,6 +58,9 @@ type model struct {
 	continueEvent          string
 	continueSourceIndexMap []int
 
+	// Loading screen animation
+	spinner spinner.Model
+
 	// Step 3-4: Client and event name input
 	clientName string
 	eventName  string
@@ -96,9 +101,29 @@ var (
 	helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("243")).MarginTop(1)
 	helpInline    = lipgloss.NewStyle().Foreground(lipgloss.Color("243")).Faint(true)
 	errStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94"))
-	confirmKey  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AD8CFF"))
+	confirmKey    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AD8CFF"))
 	loadingBorder = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#FF6AD5"))
+	spinnerStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6AD5"))
+
+	spinners = []spinner.Spinner{
+		spinner.Line,
+		spinner.Dot,
+		spinner.MiniDot,
+		spinner.Jump,
+		spinner.Pulse,
+		spinner.Points,
+		spinner.Globe,
+		spinner.Moon,
+		spinner.Monkey,
+	}
 )
+
+func newSpinner() spinner.Model {
+	s := spinner.New()
+	s.Spinner = spinners[rand.Intn(len(spinners))]
+	s.Style = spinnerStyle
+	return s
+}
 
 type initialDrivesDiscoveredMsg struct {
 	drives []driveutil.DiskInfo
@@ -106,12 +131,16 @@ type initialDrivesDiscoveredMsg struct {
 }
 
 func InitialModel() model {
-	return model{step: stepInitialScan, status: "Scanning drives..."}
+	return model{
+		step:    stepInitialScan,
+		status:  "Scanning drives",
+		spinner: newSpinner(),
+	}
 }
 
 func (m model) renderLoadingScreen(message string) string {
 	header := titleInline.Render("Dump v" + version.Version)
-	body := confirmKey.Render(message)
+	body := m.spinner.View() + " " + confirmKey.Render(message)
 	content := header + "\n\n" + body
 
 	if m.width <= 2 || m.height <= 2 {
@@ -324,10 +353,13 @@ func (m model) Init() tea.Cmd {
 		}
 	}
 	if m.step == stepInitialScan {
-		return func() tea.Msg {
-			drives, err := driveutil.DiscoverDrives()
-			return initialDrivesDiscoveredMsg{drives: drives, err: err}
-		}
+		return tea.Batch(
+			func() tea.Msg {
+				drives, err := driveutil.DiscoverDrives()
+				return initialDrivesDiscoveredMsg{drives: drives, err: err}
+			},
+			m.spinner.Tick,
+		)
 	}
 	return nil
 }
@@ -424,38 +456,41 @@ func (m model) handleBack() (tea.Model, tea.Cmd) {
 }
 
 func (m model) updateInitialScan(msg tea.Msg) (tea.Model, tea.Cmd) {
-	scan, ok := msg.(initialDrivesDiscoveredMsg)
-	if !ok {
-		return m, nil
-	}
-	if scan.err != nil {
-		m.err = fmt.Sprintf("Failed to discover drives: %v", scan.err)
-		m.status = ""
-		return m, nil
-	}
-
-	driveInfos := make([]components.DriveInfo, len(scan.drives))
-	for i, d := range scan.drives {
-		driveInfos[i] = components.DriveInfo{
-			VolumeName:     d.VolumeName,
-			MountPoint:     d.MountPoint,
-			DeviceID:       d.DeviceIdentifier,
-			TotalSize:      driveutil.FormatSize(d.TotalSize),
-			FreeSpace:      driveutil.FormatSize(d.EffectiveFreeSpace()),
-			FilesystemName: d.FilesystemName,
-			IsExternal:     d.IsExternal(),
-			IsNetwork:      d.IsNetwork,
+	switch scan := msg.(type) {
+	case initialDrivesDiscoveredMsg:
+		if scan.err != nil {
+			m.err = fmt.Sprintf("Failed to discover drives: %v", scan.err)
+			m.status = ""
+			return m, nil
 		}
+
+		driveInfos := make([]components.DriveInfo, len(scan.drives))
+		for i, d := range scan.drives {
+			driveInfos[i] = components.DriveInfo{
+				VolumeName:     d.VolumeName,
+				MountPoint:     d.MountPoint,
+				DeviceID:       d.DeviceIdentifier,
+				TotalSize:      driveutil.FormatSize(d.TotalSize),
+				FreeSpace:      driveutil.FormatSize(d.EffectiveFreeSpace()),
+				FilesystemName: d.FilesystemName,
+				IsExternal:     d.IsExternal(),
+				IsNetwork:      d.IsNetwork,
+			}
+		}
+
+		srcList := components.NewDriveList(driveInfos, true)
+		srcList.ExtraItems = []string{"Update Dump", "Resume Session", "Clean Drives"}
+
+		m.allDrives = scan.drives
+		m.sourceList = srcList
+		m.status = ""
+		m.step = stepSourceSelect
+		return m, nil
+	default:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(scan)
+		return m, cmd
 	}
-
-	srcList := components.NewDriveList(driveInfos, true)
-	srcList.ExtraItems = []string{"Update Dump", "Resume Session", "Clean Drives"}
-
-	m.allDrives = scan.drives
-	m.sourceList = srcList
-	m.status = ""
-	m.step = stepSourceSelect
-	return m, nil
 }
 
 func (m model) updateSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -621,13 +656,24 @@ func (m model) updateContinueSwap(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() != "enter" {
 			return m, nil
 		}
-		m.status = "Scanning drives..."
-		return m, func() tea.Msg {
-			drives, err := driveutil.DiscoverDrives()
-			return continueDrivesDiscoveredMsg{drives: drives, err: err}
+		m.status = "Scanning drives"
+		m.spinner = newSpinner()
+		return m, tea.Batch(
+			func() tea.Msg {
+				drives, err := driveutil.DiscoverDrives()
+				return continueDrivesDiscoveredMsg{drives: drives, err: err}
+			},
+			m.spinner.Tick,
+		)
+
+	default:
+		if m.status == "" {
+			return m, nil
 		}
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	}
-	return m, nil
 }
 
 func (m model) updateContinueSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
