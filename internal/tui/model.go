@@ -409,6 +409,14 @@ func (m model) handleBack() (tea.Model, tea.Cmd) {
 		m.step = stepClientInput
 	case stepConfirm:
 		m.step = stepEventInput
+	case stepContinueSwap:
+		m.isContinuing = false
+		m.continueDestBase = ""
+		m.continueEvent = ""
+		m.continueSourceIndexMap = nil
+		return m.resetToMainMenu()
+	case stepContinueSourceSelect:
+		m.step = stepContinueSwap
 	case stepResumeSelect, stepCleanSelect:
 		m.step = stepSourceSelect
 	}
