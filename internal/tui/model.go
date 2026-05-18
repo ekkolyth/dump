@@ -112,9 +112,6 @@ var (
 		spinner.Jump,
 		spinner.Pulse,
 		spinner.Points,
-		spinner.Globe,
-		spinner.Moon,
-		spinner.Monkey,
 	}
 )
 
