@@ -537,42 +537,56 @@ func (m model) updateDestSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+type continueDrivesDiscoveredMsg struct {
+	drives []driveutil.DiskInfo
+	err    error
+}
+
 func (m model) updateContinueSwap(msg tea.Msg) (tea.Model, tea.Cmd) {
-	key, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
-	}
-	if key.String() != "enter" {
-		return m, nil
-	}
-
-	drives, err := driveutil.DiscoverDrives()
-	if err != nil {
-		m.err = fmt.Sprintf("Failed to discover drives: %v", err)
-		return m, nil
-	}
-
-	var driveInfos []components.DriveInfo
-	m.continueSourceIndexMap = nil
-	for i, d := range drives {
-		if d.MountPoint == m.continueDestBase {
-			continue
+	switch msg := msg.(type) {
+	case continueDrivesDiscoveredMsg:
+		if msg.err != nil {
+			m.err = fmt.Sprintf("Failed to discover drives: %v", msg.err)
+			m.status = ""
+			return m, nil
 		}
-		driveInfos = append(driveInfos, components.DriveInfo{
-			VolumeName:     d.VolumeName,
-			MountPoint:     d.MountPoint,
-			DeviceID:       d.DeviceIdentifier,
-			TotalSize:      driveutil.FormatSize(d.TotalSize),
-			FreeSpace:      driveutil.FormatSize(d.EffectiveFreeSpace()),
-			FilesystemName: d.FilesystemName,
-			IsExternal:     d.IsExternal(),
-			IsNetwork:      d.IsNetwork,
-		})
-		m.continueSourceIndexMap = append(m.continueSourceIndexMap, i)
+		var driveInfos []components.DriveInfo
+		m.continueSourceIndexMap = nil
+		for i, d := range msg.drives {
+			if d.MountPoint == m.continueDestBase {
+				continue
+			}
+			driveInfos = append(driveInfos, components.DriveInfo{
+				VolumeName:     d.VolumeName,
+				MountPoint:     d.MountPoint,
+				DeviceID:       d.DeviceIdentifier,
+				TotalSize:      driveutil.FormatSize(d.TotalSize),
+				FreeSpace:      driveutil.FormatSize(d.EffectiveFreeSpace()),
+				FilesystemName: d.FilesystemName,
+				IsExternal:     d.IsExternal(),
+				IsNetwork:      d.IsNetwork,
+			})
+			m.continueSourceIndexMap = append(m.continueSourceIndexMap, i)
+		}
+		m.allDrives = msg.drives
+		m.sourceList = components.NewDriveList(driveInfos, true)
+		m.status = ""
+		m.step = stepContinueSourceSelect
+		return m, nil
+
+	case tea.KeyMsg:
+		if m.status != "" {
+			return m, nil
+		}
+		if msg.String() != "enter" {
+			return m, nil
+		}
+		m.status = "Scanning drives..."
+		return m, func() tea.Msg {
+			drives, err := driveutil.DiscoverDrives()
+			return continueDrivesDiscoveredMsg{drives: drives, err: err}
+		}
 	}
-	m.allDrives = drives
-	m.sourceList = components.NewDriveList(driveInfos, true)
-	m.step = stepContinueSourceSelect
 	return m, nil
 }
 
@@ -1120,7 +1134,12 @@ func (m model) View() string {
 		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("Continue Current Dump"))
 		b.WriteString("\n")
-		b.WriteString("Swap your cards now, then press [Enter] to start the next round.\n\n")
+		if m.status != "" {
+			b.WriteString(confirmKey.Render("  " + m.status))
+			b.WriteString("\n\n")
+		} else {
+			b.WriteString("Swap your cards now, then press [Enter] to start the next round.\n\n")
+		}
 		b.WriteString(helpInline.Render("  Adding to: ") + m.continueEvent)
 
 	case stepContinueSourceSelect:
