@@ -569,6 +569,29 @@ func (m model) updateContinueSwap(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m model) updateContinueSourceSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case components.DriveSelectedMsg:
+		if len(msg.Selected) == 0 {
+			return m, nil
+		}
+		m.selectedSources = nil
+		indices := msg.Selected
+		sort.Ints(indices)
+		for _, idx := range indices {
+			driveIdx := m.continueSourceIndexMap[idx]
+			m.selectedSources = append(m.selectedSources, m.allDrives[driveIdx])
+		}
+		return m.startContinueTransfer()
+	default:
+		m.sourceList, cmd = m.sourceList.Update(msg)
+	}
+
+	return m, cmd
+}
+
 func (m model) updateClientInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -682,6 +705,60 @@ func (m model) startTransfer() (tea.Model, tea.Cmd) {
 	m.cancelEngine = cancel
 	m.sessionID = engine.SessionID
 	m.dashboard = components.NewDashboard(dashCards)
+	m.step = stepTransfer
+
+	return m, func() tea.Msg {
+		go m.engine.Run()
+		evt, ok := <-m.engine.Events
+		if !ok {
+			return transferEventMsg{Type: transfer.EventAllComplete}
+		}
+		return transferEventMsg(evt)
+	}
+}
+
+func (m model) startContinueTransfer() (tea.Model, tea.Cmd) {
+	eventDir := filepath.Join(m.continueDestBase, m.continueEvent)
+	highest := transfer.HighestCardNumber(eventDir)
+
+	cards := make([]transfer.CardSource, len(m.selectedSources))
+	for i, src := range m.selectedSources {
+		cards[i] = transfer.CardSource{
+			MountPoint: src.MountPoint,
+			VolumeName: src.VolumeName,
+			CardIndex:  i,
+			FolderName: fmt.Sprintf("CARD %d", highest+i+1),
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	engine, err := transfer.NewEngine(ctx, cards, m.continueDestBase, m.continueEvent, transfer.MaxConcurrentDefault, transfer.MaxRetriesDefault)
+	if err != nil {
+		cancel()
+		m.err = err.Error()
+		return m, nil
+	}
+
+	completedNew := engine.CompletedStats()
+	dashCards := make([]components.CardProgress, len(engine.Cards))
+	for i, c := range engine.Cards {
+		dashCards[i] = components.CardProgress{
+			CardName:   fmt.Sprintf("card-%d", i+1),
+			VolumeName: c.VolumeName,
+			TotalFiles: c.TotalFiles,
+			TotalBytes: c.TotalBytes,
+		}
+		if s, ok := completedNew[i]; ok {
+			dashCards[i].CompletedFiles = s.Files
+			dashCards[i].BytesDone = s.Bytes
+		}
+	}
+
+	m.engine = engine
+	m.cancelEngine = cancel
+	m.sessionID = engine.SessionID
+	m.dashboard = components.NewDashboard(dashCards)
+	m.status = ""
 	m.step = stepTransfer
 
 	return m, func() tea.Msg {
