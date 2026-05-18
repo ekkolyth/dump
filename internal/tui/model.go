@@ -1109,8 +1109,30 @@ func (m model) View() string {
 		b.WriteString("\n\n")
 		b.WriteString(confirmKey.Render("  Press Enter to start import"))
 
+	case stepContinueSwap:
+		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("enter: continue | esc: cancel"))
+		b.WriteString("\n\n")
+		b.WriteString(titleStyle.Render("Continue Current Dump"))
+		b.WriteString("\n")
+		b.WriteString("Swap your cards now, then press [Enter] to start the next round.\n\n")
+		b.WriteString(helpInline.Render("  Adding to: ") + m.continueEvent)
+
+	case stepContinueSourceSelect:
+		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("space: toggle | enter: confirm | esc: back"))
+		b.WriteString("\n\n")
+		b.WriteString(titleStyle.Render("Continuing — Select Source Cards"))
+		b.WriteString("\n")
+		b.WriteString(helpInline.Render("  Adding to: " + m.continueEvent))
+		b.WriteString("\n\n")
+		b.WriteString(m.sourceList.View())
+
 	case stepTransfer:
 		b.WriteString(m.dashboard.View())
+		if m.dashboard.AllDone && m.status != "" {
+			b.WriteString("\n")
+			b.WriteString(confirmKey.Render("  ✓ " + m.status))
+			b.WriteString("\n")
+		}
 	}
 
 	return b.String()
