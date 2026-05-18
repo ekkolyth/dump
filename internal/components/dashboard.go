@@ -54,7 +54,8 @@ const (
 type PostDoneChoice int
 
 const (
-	PostDoneDeleteCards PostDoneChoice = iota
+	PostDoneContinueDump PostDoneChoice = iota
+	PostDoneDeleteCards
 	PostDoneDeleteAndExit
 	PostDoneBackToMenu
 	postDoneCount // sentinel for wrapping
@@ -296,6 +297,7 @@ func (m DashboardModel) View() string {
 		b.WriteString("\n\n")
 
 		options := []string{
+			"Continue Current Dump",
 			"Delete Cards",
 			"Delete Cards and Exit",
 			"Back to Main Menu",
