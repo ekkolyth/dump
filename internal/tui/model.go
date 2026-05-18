@@ -28,6 +28,8 @@ const (
 	stepConfirm
 	stepResumeSelect
 	stepCleanSelect
+	stepContinueSwap
+	stepContinueSourceSelect
 	stepTransfer
 )
 
@@ -47,6 +49,12 @@ type model struct {
 	destList     components.DriveListModel
 	destIndexMap []int // maps dest list indices back to allDrives indices
 	destPath     string
+
+	// Continue Current Dump flow
+	isContinuing           bool
+	continueDestBase       string
+	continueEvent          string
+	continueSourceIndexMap []int
 
 	// Step 3-4: Client and event name input
 	clientName string
