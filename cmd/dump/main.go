@@ -37,11 +37,7 @@ func main() {
 		}
 	}
 
-	fmt.Printf("dump v%s\n", version.Version)
-	fmt.Print("Scanning local drives...")
-	m := tui.InitialModel()
-	fmt.Println(" done")
-	runTUI(m)
+	runTUI(tui.InitialModel())
 }
 
 func runTUI(m tea.Model) {

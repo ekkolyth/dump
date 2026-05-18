@@ -21,7 +21,8 @@ import (
 type wizardStep int
 
 const (
-	stepSourceSelect wizardStep = iota
+	stepInitialScan wizardStep = iota
+	stepSourceSelect
 	stepDestSelect
 	stepClientInput
 	stepEventInput
@@ -96,36 +97,27 @@ var (
 	helpInline    = lipgloss.NewStyle().Foreground(lipgloss.Color("243")).Faint(true)
 	errStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#F25D94"))
 	confirmKey = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#AD8CFF"))
+	loadingBox = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#FF6AD5")).Padding(2, 6)
 )
 
+type initialDrivesDiscoveredMsg struct {
+	drives []driveutil.DiskInfo
+	err    error
+}
+
 func InitialModel() model {
-	drives, err := driveutil.DiscoverDrives()
-	if err != nil {
-		return model{err: fmt.Sprintf("Failed to discover drives: %v", err)}
-	}
+	return model{step: stepInitialScan, status: "Scanning drives..."}
+}
 
-	driveInfos := make([]components.DriveInfo, len(drives))
-	for i, d := range drives {
-		driveInfos[i] = components.DriveInfo{
-			VolumeName:     d.VolumeName,
-			MountPoint:     d.MountPoint,
-			DeviceID:       d.DeviceIdentifier,
-			TotalSize:      driveutil.FormatSize(d.TotalSize),
-			FreeSpace:      driveutil.FormatSize(d.EffectiveFreeSpace()),
-			FilesystemName: d.FilesystemName,
-			IsExternal:     d.IsExternal(),
-			IsNetwork:      d.IsNetwork,
-		}
+func (m model) renderLoadingScreen(message string) string {
+	header := titleInline.Render("Dump v" + version.Version)
+	body := confirmKey.Render(message)
+	content := header + "\n\n" + body
+	box := loadingBox.Render(content)
+	if m.width > 0 && m.height > 0 {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 	}
-
-	srcList := components.NewDriveList(driveInfos, true)
-	srcList.ExtraItems = []string{"Update Dump", "Resume Session", "Clean Drives"}
-
-	return model{
-		step:       stepSourceSelect,
-		allDrives:  drives,
-		sourceList: srcList,
-	}
+	return box
 }
 
 // WantsUpgrade returns true if the user selected "Update Dump" from the menu.
@@ -326,6 +318,12 @@ func (m model) Init() tea.Cmd {
 			return transferEventMsg(evt)
 		}
 	}
+	if m.step == stepInitialScan {
+		return func() tea.Msg {
+			drives, err := driveutil.DiscoverDrives()
+			return initialDrivesDiscoveredMsg{drives: drives, err: err}
+		}
+	}
 	return nil
 }
 
@@ -371,6 +369,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.step {
+	case stepInitialScan:
+		return m.updateInitialScan(msg)
 	case stepSourceSelect:
 		return m.updateSourceSelect(msg)
 	case stepDestSelect:
@@ -415,6 +415,41 @@ func (m model) handleBack() (tea.Model, tea.Cmd) {
 	case stepResumeSelect, stepCleanSelect:
 		m.step = stepSourceSelect
 	}
+	return m, nil
+}
+
+func (m model) updateInitialScan(msg tea.Msg) (tea.Model, tea.Cmd) {
+	scan, ok := msg.(initialDrivesDiscoveredMsg)
+	if !ok {
+		return m, nil
+	}
+	if scan.err != nil {
+		m.err = fmt.Sprintf("Failed to discover drives: %v", scan.err)
+		m.status = ""
+		return m, nil
+	}
+
+	driveInfos := make([]components.DriveInfo, len(scan.drives))
+	for i, d := range scan.drives {
+		driveInfos[i] = components.DriveInfo{
+			VolumeName:     d.VolumeName,
+			MountPoint:     d.MountPoint,
+			DeviceID:       d.DeviceIdentifier,
+			TotalSize:      driveutil.FormatSize(d.TotalSize),
+			FreeSpace:      driveutil.FormatSize(d.EffectiveFreeSpace()),
+			FilesystemName: d.FilesystemName,
+			IsExternal:     d.IsExternal(),
+			IsNetwork:      d.IsNetwork,
+		}
+	}
+
+	srcList := components.NewDriveList(driveInfos, true)
+	srcList.ExtraItems = []string{"Update Dump", "Resume Session", "Clean Drives"}
+
+	m.allDrives = scan.drives
+	m.sourceList = srcList
+	m.status = ""
+	m.step = stepSourceSelect
 	return m, nil
 }
 
@@ -1030,6 +1065,8 @@ func (m model) View() string {
 	var b strings.Builder
 
 	switch m.step {
+	case stepInitialScan:
+		return m.renderLoadingScreen(m.status)
 	case stepSourceSelect:
 		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("space: toggle | enter: select | esc: quit"))
 		b.WriteString("\n")
@@ -1130,16 +1167,14 @@ func (m model) View() string {
 		b.WriteString(confirmKey.Render("  Press Enter to start import"))
 
 	case stepContinueSwap:
+		if m.status != "" {
+			return m.renderLoadingScreen(m.status)
+		}
 		b.WriteString(titleInline.Render("Dump v"+version.Version) + "  " + helpInline.Render("enter: continue | esc: cancel"))
 		b.WriteString("\n\n")
 		b.WriteString(titleStyle.Render("Continue Current Dump"))
 		b.WriteString("\n")
-		if m.status != "" {
-			b.WriteString(confirmKey.Render("  " + m.status))
-			b.WriteString("\n\n")
-		} else {
-			b.WriteString("Swap your cards now, then press [Enter] to start the next round.\n\n")
-		}
+		b.WriteString("Swap your cards now, then press [Enter] to start the next round.\n\n")
 		b.WriteString(helpInline.Render("  Adding to: ") + m.continueEvent)
 
 	case stepContinueSourceSelect:
